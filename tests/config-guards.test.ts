@@ -28,7 +28,7 @@ describe("runtime database role", () => {
   it("refuses to run on a connection that can bypass row-level security (owner/superuser)", async () => {
     env.DATABASE_URL = ADMIN_URL;
     const { withoutUser } = await import("@/lib/db");
-    await expect(withoutUser((c) => c.query("select 1"))).rejects.toThrow(/bypass row-level security/);
+    await expect(withoutUser((c) => c.query("select 1"))).rejects.toThrow(/bypass(es)? row-level security/);
     const g = globalThis as unknown as { __trackerPool?: { end(): Promise<void> } };
     await g.__trackerPool?.end();
   });
