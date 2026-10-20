@@ -111,3 +111,18 @@ export const names = (rows: { name: string }[]) => rows.map((r) => r.name).sort(
 export async function migrateToLatest() {
   await setupDatabase({ adminUrl: ADMIN_URL, appPassword: APP_PASSWORD });
 }
+
+/** Drop the throwaway database, then the given cluster-level roles (only call with roles this test created). */
+export async function dropDatabaseAndRoles(roles: string[] = []) {
+  await closePools();
+  const maintUrl = new URL(ADMIN_URL);
+  maintUrl.pathname = "/postgres";
+  const maint = new pg.Client({ connectionString: maintUrl.toString() });
+  await maint.connect();
+  try {
+    await maint.query(`drop database if exists ${pg.escapeIdentifier(dbName)} with (force)`);
+    for (const r of roles) await maint.query(`drop role if exists ${pg.escapeIdentifier(r)}`);
+  } finally {
+    await maint.end();
+  }
+}

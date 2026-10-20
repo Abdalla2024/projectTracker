@@ -1,5 +1,6 @@
 import "server-only";
 import pg from "pg";
+import { connectionConfig } from "./db-ssl";
 
 // Every query from the web app goes through withUser() / withoutUser(). The connection is the
 // restricted `tracker_app` role, so row-level security applies to everything run here.
@@ -16,7 +17,7 @@ function pool(): pg.Pool {
   if (!globalForPool.__trackerPool) {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error("DATABASE_URL is not set (see .env.example).");
-    globalForPool.__trackerPool = new pg.Pool({ connectionString: url, max: poolMax() });
+    globalForPool.__trackerPool = new pg.Pool({ ...connectionConfig(url, process.env.DATABASE_CA_CERT), max: poolMax() });
   }
   return globalForPool.__trackerPool;
 }

@@ -4,8 +4,41 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { pgConfig } from "./pgconfig.mjs";
 
 export const APP_ROLE = "tracker_app";
+// Roles that hosted providers use for their public APIs. They must never reach our objects (see migration 005).
+export const API_ROLES = ["anon", "authenticated", "service_role"];
+
+/** Returns a list of "role -> object" exposures; empty when the API roles (if they exist) can reach nothing of ours. */
+export async function findApiRoleExposure(client) {
+  const exposed = [];
+  // Separate simple queries (not one union): Postgres may evaluate a privilege function before a relkind filter.
+  const tables = await client.query(
+    `select c.oid, c.relname from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','p','v','m','f')`);
+  const sequences = await client.query(
+    `select c.oid, c.relname from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'S'`);
+  const functions = await client.query(
+    `select p.oid, p.proname as relname from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f','p')
+       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')`);
+  const existing = (await client.query("select rolname from pg_roles where rolname = any($1)", [API_ROLES])).rows.map((x) => x.rolname);
+  for (const role of existing) {
+    for (const t of tables.rows) {
+      const ok = (await client.query("select has_table_privilege($1, $2::oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') as ok", [role, t.oid])).rows[0].ok;
+      if (ok) exposed.push(`${role} -> table ${t.relname}`);
+    }
+    for (const q of sequences.rows) {
+      const ok = (await client.query("select has_sequence_privilege($1, $2::oid, 'USAGE,SELECT,UPDATE') as ok", [role, q.oid])).rows[0].ok;
+      if (ok) exposed.push(`${role} -> sequence ${q.relname}`);
+    }
+    for (const f of functions.rows) {
+      const ok = (await client.query("select has_function_privilege($1, $2::oid, 'EXECUTE') as ok", [role, f.oid])).rows[0].ok;
+      if (ok) exposed.push(`${role} -> function ${f.relname}`);
+    }
+  }
+  return exposed;
+}
+
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "db", "migrations");
 
 function withDatabase(url, dbName) {
@@ -27,12 +60,12 @@ export async function setupDatabase({ adminUrl, appPassword, upTo, log = () => {
   // 1. Connect to the target database. Only if it does not exist yet (local development) create it,
   //    through the maintenance database. On a hosted database it already exists and this step is skipped,
   //    so the owner login does not need the CREATEDB privilege.
-  let client = new pg.Client({ connectionString: adminUrl });
+  let client = new pg.Client(pgConfig(adminUrl));
   try {
     await client.connect();
   } catch (err) {
     if (err.code !== "3D000") throw err; // 3D000 = database does not exist
-    const maint = new pg.Client({ connectionString: withDatabase(adminUrl, "postgres") });
+    const maint = new pg.Client(pgConfig(withDatabase(adminUrl, "postgres")));
     await maint.connect();
     try {
       await maint.query(`create database ${pg.escapeIdentifier(dbName)}`);
@@ -40,7 +73,7 @@ export async function setupDatabase({ adminUrl, appPassword, upTo, log = () => {
     } finally {
       await maint.end();
     }
-    client = new pg.Client({ connectionString: adminUrl });
+    client = new pg.Client(pgConfig(adminUrl));
     await client.connect();
   }
 
@@ -82,6 +115,14 @@ export async function setupDatabase({ adminUrl, appPassword, upTo, log = () => {
       }
       applied.push(file);
       log(`applied ${file}`);
+    }
+
+    // 4. Fail loudly if a provider API role can still reach any of our objects.
+    const exposed = await findApiRoleExposure(client);
+    if (exposed.length) {
+      throw new Error(
+        `provider API roles can still reach this app's objects (${exposed.length}), which would bypass its sign-in checks. First: ${exposed.slice(0, 5).join("; ")}`,
+      );
     }
   } finally {
     await client.end();

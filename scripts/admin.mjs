@@ -5,6 +5,7 @@
 //   npm run admin -- disable person@example.com   (blocks sign-in and ends access)
 //   npm run admin -- enable person@example.com
 import pg from "pg";
+import { pgConfig } from "./lib/pgconfig.mjs";
 
 const [cmd, rawEmail] = process.argv.slice(2);
 const url = process.env.DATABASE_ADMIN_URL;
@@ -18,7 +19,7 @@ if (cmd && cmd !== "list" && !(email && /^[^@\s]+@[^@\s]+$/.test(email))) {
   process.exit(1);
 }
 
-const client = new pg.Client({ connectionString: url });
+const client = new pg.Client(pgConfig(url));
 await client.connect();
 try {
   if (cmd === "list") {
