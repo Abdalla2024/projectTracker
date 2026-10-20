@@ -15,7 +15,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
         <h1>Check your email</h1>
         <p className="muted">We sent a 6-digit code to <b>{email}</b>. It expires in 10 minutes.</p>
         {devConsole ? (
-          <p className="alert error">Local development mode: the email is not actually sent. The code is printed in the server terminal.</p>
+          <p className="alert info">Local development mode: the email is not actually sent. The code is printed in the server terminal.</p>
         ) : null}
         <Alerts error={error} />
         <form action={verifyCodeAction}>
