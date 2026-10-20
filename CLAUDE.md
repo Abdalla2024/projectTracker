@@ -1,35 +1,17 @@
-# Ekiben Project Tracker — working guidance
+# Ekiben Project Tracker — working rules
 
-Internal project tracker for Ekiben (Baltimore restaurant), built during a 5-week AI Builder fellowship. Context, requirements, decisions and open questions: [docs/tracker-brief.md](docs/tracker-brief.md). Setup and limits: [README.md](README.md). Rules matrix: [docs/ACCESS.md](docs/ACCESS.md).
+Context and requirements: [docs/tracker-brief.md](docs/tracker-brief.md). Setup, commands, limits: [README.md](README.md). Permissions: [docs/ACCESS.md](docs/ACCESS.md).
 
-## Commands
-- `npm test` — 59 checks against a real throwaway Postgres (`ekiben_tracker_test`, refuses names not ending `_test`). Needs local Postgres.
-- `npm run typecheck`, `npm run build`, `npm run dev`
-- `npm run db:setup` (create DB + `tracker_app` role, apply migrations), `npm run db:seed-demo [-- --reset]`, `npm run admin -- grant|revoke|disable|enable|list [email]`
+## Rules
+- **Protect sensitive data.** Use synthetic data only (`[DEMO]`, `ekiben-demo.example`). No employee, customer, financial, or payroll data in code, seeds, tests, or docs. Never invent people or admin emails.
+- **Never commit secrets.** `.env.local` stays ignored; `.env.example` holds placeholders only. Check staged files before committing.
+- **Ask before** deploying, creating accounts or vendors, sending invitations or email, or adding admins.
+- **Commit after each coherent addition**, with a message saying what and why. End with `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
+- **Report only checks actually run.** Give failures with their output, and say what was not verified. Label assumptions; don't present defaults as Ekiben requirements.
+- Keep the first version small. Update docs in the same change as behavior.
 
-## Architecture invariants (do not weaken without asking)
-- **The database is the access control.** Row-level security + triggers in `db/migrations/002_security.sql` decide visibility and which columns each role may change. Server actions and the UI only mirror them. Never add a visibility filter in app code *instead of* a policy.
-- The web app connects as `tracker_app` (not owner, no BYPASSRLS) and sets `app.user_id` per transaction via `lib/db.ts` (`withUser` / `withoutUser`). All queries go through those. `DATABASE_ADMIN_URL` is for scripts only.
-- Role is set only by the `admin_emails` allowlist trigger. The app role has no write grant on `profiles`. Do not add role selection or a role-change path to the app.
-- History (`project_events`) is written only by triggers, same transaction as the change, and is append-only. Do not insert events from app code.
-- Changes to rules go in a **new numbered migration**, not by editing an applied one, plus a test that tries the forbidden action as the wrong user.
-- Reporting time zone is `America/New_York` (config `APP_TIME_ZONE`); week = Monday 00:00 local. Use `lib/time.ts` (Luxon), never UTC arithmetic.
-
-## Working agreements
-- State assumptions; separate what you observed from what you recommend. Provisional facts (email domain `ekibenbaltimore.com`, store list, edit/assignment rules, statuses) are defaults to confirm, not requirements.
-- Do not claim a feature, test or control works unless you ran or inspected it. Report failures with the output. Say what was *not* verified (e.g. the UI has not been reviewed in a browser).
-- Security-sensitive changes need a focused test at the layer that enforces them (usually `tests/access.test.ts` or `tests/auth.test.ts`), run as `tracker_app`, not as the owner.
-- Keep v1 small. No speculative features, no platform for other Ekiben projects until a real need is shown.
-- Ask before: deploying, creating external accounts or vendors, sending invitations/email, adding admin emails, or putting real data anywhere. Never invent admin emails or people.
-- Data: synthetic only (`[DEMO]`, `ekiben-demo.example`). No employee, customer, financial or payroll data. No secrets in git; `.env.local` is ignored, `.env.example` has placeholders only. The demo domain must never be allowed on a hosted deployment.
-- Commit after each coherent step, with a message saying what and why. End commits with `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
-- Update docs in the same change as behavior (README limits, ACCESS matrix, ADMIN steps).
-
-## Gotchas learned here
-- `next dev` breaks on `node --env-file…` (NODE_OPTIONS rejects it); Next loads `.env.local` itself. Scripts use `--env-file-if-exists`.
-- RLS policies on `projects` take the row's own columns (`app_project_visible(id, created_by)`) so `INSERT … RETURNING` works; a STABLE helper that re-queries `projects` would not see the new row.
-- The guard trigger fires before RLS `WITH CHECK`, so a forbidden insert may fail with the trigger message instead of "row-level security". Tests accept either.
-- Postgres timestamps have microseconds; a JS `Date` truncates them. Compare as text/`::timestamptz` (this broke the seed once).
-- Login codes are throttled (30 s, 5/hour per email). When driving the app repeatedly in dev, `delete from login_codes`.
-- React inserts `<!-- -->` between adjacent text nodes; HTML-scraping scripts must allow for it. Server-action forms: the header's sign-out form is the first `<form>` on every page.
-- `AGENTS.md` is generated by `next dev`; it points at Next's bundled docs (`node_modules/next/dist/docs/`). Next here is v16 — check them before using APIs from memory.
+## Security invariants (don't weaken without asking)
+- Access is enforced in the database (row-level security + triggers in `db/migrations`), not only in the UI or server code. Change rules in a new migration, with a test that tries the forbidden action as the restricted `tracker_app` role.
+- Roles come only from the `admin_emails` allowlist, managed out of band. The app must never offer role selection or changes.
+- Project history is written only by triggers and is append-only.
+- The web app never uses the owner connection or exposes database credentials to the browser.
