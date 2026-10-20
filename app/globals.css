@@ -61,5 +61,16 @@ ul.plain li:last-child { border-bottom: 0; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
 .stat b { display: block; font-size: 1.6rem; line-height: 1.1; }
-.login { max-width: 420px; margin: 64px auto; }
+.login { max-width: 420px; margin: 64px auto; padding: 0 16px; }
 .hint { font-size: .85rem; color: var(--muted); }
+
+/* Phone layout: header on three tidy rows, and the project table becomes stacked cards. */
+@media (max-width: 640px) {
+  .brand, nav { flex-basis: 100%; }
+  .login { margin-top: 32px; }
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  table.stack td { border: 0; padding: 2px 0; }
+  table.stack td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-size: .85rem; }
+}

@@ -31,7 +31,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
         {projects.length === 0 ? (
           <p className="muted">No projects yet. Create one to get started.</p>
         ) : (
-          <table>
+          <table className="stack">
             <thead>
               <tr><th>Project</th><th>Status</th><th>Priority</th><th>Deadline</th><th>Assigned to</th><th>Stores</th><th>Updated</th></tr>
             </thead>
@@ -46,12 +46,12 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
                       {p.archived_at ? <> <span className="chip">archived</span></> : null}
                       {p.next_step ? <div className="hint">Next: {p.next_step}</div> : null}
                     </td>
-                    <td><span className={`chip ${p.status}`}>{STATUS_LABELS[p.status]}</span></td>
-                    <td><span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]}</span></td>
-                    <td>{p.deadline ? formatDate(p.deadline) : "—"}{overdue ? <> <span className="chip bad">overdue</span></> : null}</td>
-                    <td>{p.assignees.length ? p.assignees.join(", ") : <span className="muted">unassigned</span>}</td>
-                    <td>{p.stores.length ? p.stores.join(", ") : "—"}</td>
-                    <td className="muted">{formatDateTime(p.updated_at, zone)}</td>
+                    <td data-label="Status"><span className={`chip ${p.status}`}>{STATUS_LABELS[p.status]}</span></td>
+                    <td data-label="Priority"><span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]}</span></td>
+                    <td data-label="Deadline">{p.deadline ? formatDate(p.deadline) : "—"}{overdue ? <> <span className="chip bad">overdue</span></> : null}</td>
+                    <td data-label="Assigned to">{p.assignees.length ? p.assignees.join(", ") : <span className="muted">unassigned</span>}</td>
+                    <td data-label="Stores">{p.stores.length ? p.stores.join(", ") : "—"}</td>
+                    <td className="muted" data-label="Updated">{formatDateTime(p.updated_at, zone)}</td>
                   </tr>
                 );
               })}
