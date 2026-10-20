@@ -1,0 +1,8 @@
+# Never upload local environment files or build output when deploying from the CLI.
+# (Configure real settings in Vercel's Environment Variables instead.)
+.env
+.env.*
+!.env.example
+.next
+node_modules
+.vercel
