@@ -3,6 +3,7 @@
 .env
 .env.*
 !.env.example
+!.env.remote.example
 .next
 node_modules
 .vercel

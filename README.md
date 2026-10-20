@@ -44,7 +44,7 @@ Everything seeded is labeled `[DEMO]` / `(synthetic)`. `npm run db:seed-demo -- 
 
 ## Online demo
 
-Prepared for Vercel with a hosted PostgreSQL and an SMTP sender, but **not deployed yet**: it needs accounts and credentials only you can provide. Exact needs, setup, verification, and rollback: [docs/PRIVATE-DEMO.md](docs/PRIVATE-DEMO.md). `GET /api/health` reports whether a running instance reaches the database as the restricted role with row-level security on.
+Deployed on Vercel (https://ekiben-project-tracker.vercel.app) with GitHub connected, using a Supabase-hosted PostgreSQL and an SMTP sender. Sign-in is not usable until the database and email sender are configured. What is needed, setup, verification, and rollback: [docs/PRIVATE-DEMO.md](docs/PRIVATE-DEMO.md). For the remote database use `npm run db:setup:remote` and `npm run admin:remote -- ...`, which read a git-ignored `.env.remote` (template: `.env.remote.example`). `GET /api/health` reports whether a running instance reaches the database as the restricted role with row-level security on.
 
 ## Commands
 
@@ -68,6 +68,7 @@ All settings are environment variables; see [.env.example](.env.example) (placeh
 | `APP_DB_PASSWORD` | Password `db:setup` gives the `tracker_app` role |
 | `ALLOWED_EMAIL_DOMAINS` | Comma-separated. **`ekibenbaltimore.com` is a provisional value — confirm with Ekiben** |
 | `DEV_ALLOWED_EMAIL` | **Local development only.** One exact full email address allowed to sign in besides the allowed domains (set it in `.env.local` only). Not a domain or list; plus aliases still rejected; account is still a member; refused when `NODE_ENV=production` |
+| `DATABASE_CA_CERT` | PEM text of the database provider's CA certificate (a public certificate). Needed when the provider signs with its own CA (e.g. Supabase); keeps full TLS verification on. Scripts also accept `DATABASE_CA_CERT_FILE` (a path) |
 | `DATABASE_POOL_MAX` | Max database connections per server instance (default 10; use 3 on a serverless host) |
 | `AUTH_SECRET` | Random string used to hash login codes |
 | `APP_TIME_ZONE` | Reporting time zone (default `America/New_York`, handles daylight saving) |
@@ -86,10 +87,12 @@ docs/                 ACCESS.md, ADMIN.md, PRIVATE-DEMO.md
 
 ## What is tested
 
-`npm test` runs 85 checks in 8 files against a real throwaway Postgres, as the same restricted role the app uses:
+`npm test` runs 101 checks in 10 files against a real throwaway Postgres, as the same restricted role the app uses:
 - [tests/access.test.ts](tests/access.test.ts) — who can see/change what (members, assignees, admins, disabled users, no-user), role cannot be self-assigned, history is written with every change and cannot be edited, failed changes leave no history.
 - [tests/auth.test.ts](tests/auth.test.ts) — login codes (one-time, expiry, attempt lock, throttle), domain enforcement, admin allowlist, disabled users, session end.
 - [tests/summary.test.ts](tests/summary.test.ts), [tests/time.test.ts](tests/time.test.ts) — start-of-week vs now reconstruction, deadline flags, Monday boundary, both daylight-saving transitions.
+- [tests/api-roles.test.ts](tests/api-roles.test.ts) — hosted-provider API roles (`anon`, `authenticated`, `service_role`) can reach none of our tables or functions, even with provider default grants in place; setup fails if they regain access.
+- [tests/db-ssl.test.ts](tests/db-ssl.test.ts) — supplying a provider CA keeps TLS verification on; bad values are refused.
 - [tests/health.test.ts](tests/health.test.ts) — the `/api/health` deployment check (connected as the restricted role, row-level security on; no detail on any failure).
 - [tests/remove-stores.test.ts](tests/remove-stores.test.ts) — upgrading a database that had store data through migration 003 (history kept, feature removed).
 - [tests/email-address.test.ts](tests/email-address.test.ts), [tests/config-guards.test.ts](tests/config-guards.test.ts) — email/domain rules, refusal of privileged DB connections and of dev-only email in production.

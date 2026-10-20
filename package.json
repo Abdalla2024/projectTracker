@@ -14,7 +14,9 @@
     "test": "vitest run",
     "db:setup": "node --env-file-if-exists=.env.local scripts/db-setup.mjs",
     "db:seed-demo": "node --env-file-if-exists=.env.local scripts/seed-demo.mjs",
-    "admin": "node --env-file-if-exists=.env.local scripts/admin.mjs"
+    "admin": "node --env-file-if-exists=.env.local scripts/admin.mjs",
+    "db:setup:remote": "node --env-file=.env.remote scripts/db-setup.mjs",
+    "admin:remote": "node --env-file=.env.remote scripts/admin.mjs"
   },
   "dependencies": {
     "luxon": "^3.7.2",

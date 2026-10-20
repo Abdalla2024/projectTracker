@@ -1,104 +1,75 @@
-# Online demo on Vercel: setup, verification, rollback
+# Online demo: Vercel + Supabase database + SMTP
 
-**Status (Oct 20, 2026): deployed but not yet usable, and not yet auto-deploying.**
-- Vercel project `ekiben-project-tracker` exists in the `abdalla-abdelmagids-projects` team (Hobby plan). A production deployment built in 23 s and is **Ready** at **https://ekiben-project-tracker.vercel.app**. Anyone can open the sign-in page (the production domain is public), but **sign-in cannot work** until a database and SMTP sender are configured. `/api/health` returns `503 {"ok":false}`; the Vercel runtime log says `DATABASE_URL is not set`.
-- **GitHub auto-deploy is not connected.** `vercel git connect` fails ("Failed to connect Abdalla2024/projectTracker"). Most likely the Vercel GitHub app has no access to this new repo; see section 1, item 2. Until then, pushes to `main` do **not** deploy.
-- Production environment variables set so far: `AUTH_SECRET` (new, generated and sent straight to Vercel), `ALLOWED_EMAIL_DOMAINS=ekibenbaltimore.com` (provisional until Ekiben confirms), `APP_TIME_ZONE`, `DATABASE_POOL_MAX=3`, `EMAIL_TRANSPORT=smtp`. Still missing: `DATABASE_URL`, `EMAIL_FROM`, `SMTP_*`.
+The app is deployed on Vercel at **https://ekiben-project-tracker.vercel.app** (Hobby plan, project `ekiben-project-tracker`). The Git connection is set up. Sign-in does not work yet: it still needs the Supabase connection details and an email sender (section 1). Use synthetic data only. Do not enter real Ekiben, customer, or financial data without approval.
 
-The demo uses the existing app and its PostgreSQL security model (row-level security, triggers, restricted role). It does not need a rewrite or another database product, but it does need a **hosted PostgreSQL** and an **SMTP sender**, because a serverless host has no local database and the sign-in code must be emailed.
+## 0. Status (Oct 20, 2026)
+- **Done:** project created; production build succeeds on Vercel; GitHub repo `Abdalla2024/projectTracker` connected with `main` as the production branch (`vercel git connect` reported "Connected"; the project's Git link shows that repo and branch); production variables set for `AUTH_SECRET`, `ALLOWED_EMAIL_DOMAINS=ekibenbaltimore.com` (provisional until Ekiben confirms), `APP_TIME_ZONE`, `DATABASE_POOL_MAX`, `EMAIL_TRANSPORT=smtp`.
+- **Not done:** `DATABASE_URL`, `DATABASE_CA_CERT`, `EMAIL_FROM`, `SMTP_*`; database setup; admin accounts (deliberately postponed). Whether a push actually triggers a deployment is confirmed in the brief if and when it has been tested.
+- **Protection, as observed:** the production domain answers anonymously (HTTP 200), so testers need no Vercel login. Per-deployment URLs redirect to a Vercel login.
+- **Plan note:** Hobby is, as I understand Vercel's terms, for personal non-commercial use; a business demo may need a paid plan. Check Vercel's current terms.
 
-## 1. What is still needed
+## 1. What is needed from you
 
-| # | Needed | Why | Default I recommend |
-|---|---|---|---|
-| 1 | **Decision on the commit author email.** The 14 commits pushed on Oct 20 show your personal Gmail as the author in the **public** repo. Removing it now means rewriting history and force-pushing; copies, forks and caches may remain. | Privacy | Decide whether that matters; commits made after that use the GitHub no-reply address (see below) |
-| 2 | **Give Vercel access to the repo.** GitHub → Settings → Applications → Installed GitHub Apps → **Vercel** → Configure → under Repository access, add `projectTracker` (or choose All repositories) → Save. If Vercel isn't listed, install it from the Vercel project's Settings → Git. | The connection fails without it, so pushes can't deploy | Then I rerun `vercel git connect` and test a push |
-| 3 | A **hosted PostgreSQL** you approve and own, with an **owner** URL (direct) and a **pooled** URL | The app needs a database | Any provider with roles, row-level security, triggers, TLS |
-| 4 | An **SMTP provider** and a verified sender address (host, port, user, password) | Sign-in codes are emailed; there is no other login | Any SMTP service you already use |
-| 5 | The **admin emails**, sent privately | Admins come only from the allowlist; none are invented | Give them when ready |
-| 6 | Ekiben's confirmation that **`ekibenbaltimore.com`** is the right domain | It is configured, but provisional | Single domain |
+Fill these in **yourself**, in a file, so passwords never appear in chat.
 
-**Plan note:** the project is on a Hobby plan. As I understand Vercel's terms, Hobby is for personal, non-commercial use, and a business demo may need a paid plan. Check Vercel's current terms. (Also, a Hobby team cannot deploy from a private repository owned by a GitHub organization: [Vercel Git docs](https://vercel.com/docs/git).)
+1. **Create `.env.remote`**: `cp .env.remote.example .env.remote` and edit it. It is ignored by git and never uploaded to Vercel. Tell me when it is filled in; I run the setup and copy the right values into Vercel without printing them.
+2. **From the Supabase dashboard** (click **Connect** at the top of the project):
+   - **Session pooler** string (port 5432) → `DATABASE_ADMIN_URL`. Use this one from your computer, not "Direct connection", which is IPv6-only by default ([Supabase docs](https://supabase.com/docs/guides/troubleshooting/supavisor-faq-YyP5tI)). The user looks like `postgres.<project-ref>`; the password is your database password.
+   - **Transaction pooler** string (port 6543) → `DATABASE_URL`, but with the user changed to **`tracker_app.<project-ref>`** and the password set to your new `APP_DB_PASSWORD`. Transaction mode is Supabase's recommendation for serverless hosts and does not support prepared statements, which this app does not use.
+   - **CA certificate**: Project Settings → Database → SSL configuration → download, and put the file path in `DATABASE_CA_CERT_FILE`. Supabase's certificates are signed by its own CA, which Node does not trust by default; without it the connection fails certificate verification (section 3).
+3. **An email sender (SMTP).** See the next subsection. You need host, port, user, password, and a verified sender address for `EMAIL_FROM`.
+4. **Confirmation from Ekiben** that `ekibenbaltimore.com` is the right domain (still provisional).
+5. *(Later)* admin emails, sent privately, when you want admin accounts.
 
-**Protection, as observed:** the production domain answers anonymously (HTTP 200) so testers need no Vercel login. The unique per-deployment URLs redirect to a Vercel login (HTTP 302). Both are public-facing only as far as the app's own sign-in, which stays in force.
+### About Supabase's custom SMTP feature
+Supabase's custom SMTP setting configures emails sent by **Supabase Auth** (its own sign-up, magic-link and OTP flows); its docs tie it to those flows ([Supabase docs](https://supabase.com/docs/guides/auth/auth-smtp)). **This app does not use Supabase Auth**: it has its own sign-in codes, generated and emailed by the app, with only a hash stored in the database. So that setting will not send this app's emails. You still need an SMTP service, and the same provider can be used in both places. Any SMTP provider works: put its host, port, user, password and a verified sender in `.env.remote`. Sending as an Ekiben address usually requires the provider to verify the domain (DNS records) or at least a single sender address; follow the provider's instructions. Replacing the app's login with Supabase Auth would be a rewrite of the sign-in and its role rules, which this plan deliberately avoids.
 
-Only for item 1, if you choose to scrub the address (not run; they rewrite history and need a force-push, so only you should approve). For future commits, set the identity first:
+## 2. Setup (after section 1)
+
+**A. Database (from your machine)**
 ```bash
-git config user.email "161538926+Abdalla2024@users.noreply.github.com"   # the address your first commit used
-# To rewrite already-pushed commits you would additionally need: git rebase --root --exec 'git commit --amend --no-edit --reset-author', then git push --force-with-lease
+npm run db:setup:remote     # creates the restricted tracker_app role, applies migrations 001-005, then checks the result
 ```
-As a further safeguard, GitHub has (as I recall; confirm in your GitHub email settings) an option to block command-line pushes that expose your private email address. The new commit `d9c0328` already uses the no-reply address.
+It fails loudly if the app role would be privileged, or if any Supabase API role (`anon`, `authenticated`, `service_role`) can still reach our tables or functions. It is safe to re-run: it applies only what is missing and repeats the checks. To verify by hand:
+```sql
+select rolsuper, rolcreatedb, rolcreaterole, rolbypassrls from pg_roles where rolname = 'tracker_app';  -- all false
+select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and relrowsecurity;  -- 9
+```
+Admins later: `npm run admin:remote -- grant person@ekibenbaltimore.com`.
 
-**Plan note (verify before you sign up):** as I understand Vercel's terms, the free Hobby plan is for personal, non-commercial use, and a business demo may need a paid plan. Check Vercel's current terms. Also, a Hobby team cannot deploy from a private repository owned by a GitHub organization ([Vercel Git docs](https://vercel.com/docs/git)).
+**B. Vercel environment variables** (Production only; secrets as Sensitive). Already set: `AUTH_SECRET`, `ALLOWED_EMAIL_DOMAINS`, `APP_TIME_ZONE`, `DATABASE_POOL_MAX`, `EMAIL_TRANSPORT`. To add: `DATABASE_URL`, `DATABASE_CA_CERT` (the certificate's text), `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT` (587 STARTTLS or 465 implicit TLS; both supported), `SMTP_USER`, `SMTP_PASSWORD`. Do **not** set `DEV_ALLOWED_EMAIL` (production refuses all sign-in if it is set), `DATABASE_ADMIN_URL`, or `APP_DB_PASSWORD`. Set them with `printf '%s' value | vercel env add NAME production`, which keeps secrets out of files and shell history, then redeploy (a rollback does not pick up variable changes).
 
-## 2. One-time setup (in this order)
+**C. Deploy and check.** Push to `main` (or `vercel deploy --prod`). Then:
+1. `GET /api/health` → `{"ok":true,"database":"connected","rowLevelSecurity":true}`. Any failure returns `503 {"ok":false}`; the reason is in the Vercel runtime logs (`vercel logs`).
+2. Sign in with a real Ekiben address: the code arrives by email; you are a **member** unless on the admin allowlist.
+3. With two accounts, repeat the checks in [ACCESS.md](ACCESS.md) (members cannot see others' unassigned projects; assignment; history; summaries). Admin-only checks need an admin account.
 
-**A. Database**
-1. Create the hosted Postgres. Note two URLs: the **owner** URL (direct, not pooled; used only from your machine) and a **pooled** URL for the app (a serverless host opens many short connections).
-2. Require TLS. Put `?sslmode=verify-full` on the URLs. The `pg` driver is documented to be moving away from the meaning of `sslmode=require`, so `verify-full` is explicit. I confirmed the driver refuses a non-TLS server with this setting; I could not test certificate checking against a real provider.
-3. From your machine (not Vercel), create the runtime role and apply migrations:
-   ```bash
-   DATABASE_ADMIN_URL='postgres://OWNER:PASSWORD@HOST/DB?sslmode=verify-full' \
-   APP_DB_PASSWORD='<new long random password>' npm run db:setup
-   ```
-   This works with an existing database and a non-superuser owner (it does not need CREATEDB). It fails loudly if the runtime role would be privileged. It does **not** run on deploys; migrations are a separate, deliberate step.
-4. Check the result:
-   ```sql
-   select rolsuper, rolcreatedb, rolcreaterole, rolbypassrls from pg_roles where rolname = 'tracker_app';  -- all false
-   select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and relrowsecurity;  -- 9
-   ```
-5. Make admins (after you provide the emails): `DATABASE_ADMIN_URL=… npm run admin -- grant person@ekibenbaltimore.com`. Admin changes always use the owner URL from a trusted machine, never from Vercel.
+**Confirm automatic deployments:** push a small commit to `main`, then open **Deployments** in the Vercel project: a new **Production** deployment should appear with that commit's SHA. Other branches and pull requests become preview deployments ([Vercel Git docs](https://vercel.com/docs/git)). Previews have no database variables, so they build but cannot sign anyone in.
 
-**B. Vercel project** (steps 1 and the non-database variables are already done; see Status)
-1. Vercel dashboard → **Add New → Project → Import Git Repository** → pick `Abdalla2024/projectTracker`. Framework is detected as Next.js; keep the default build command (`npm run build`) and output. Production branch: `main`.
-2. Before the first deploy, add the environment variables below under **Settings → Environment Variables**, scoped to **Production** only. Mark secrets as Sensitive.
+## 3. Supabase-specific safeguards (why the app was changed)
 
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | `postgres://tracker_app:<APP_DB_PASSWORD, URL-encoded>@<POOLED_HOST>/<db>?sslmode=verify-full` |
-| `DATABASE_POOL_MAX` | `3` (per instance; each serverless instance has its own pool) |
-| `AUTH_SECRET` | a new value from `openssl rand -hex 32` (never reuse the local one) |
-| `ALLOWED_EMAIL_DOMAINS` | `ekibenbaltimore.com` (once confirmed) |
-| `APP_TIME_ZONE` | `America/New_York` |
-| `EMAIL_TRANSPORT` | `smtp` |
-| `EMAIL_FROM` | `Ekiben Project Tracker <verified-sender@your-domain>` |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | from your provider. Port 587 uses STARTTLS; port 465 uses implicit TLS (handled by the app) |
+- **API roles must not reach our database objects.** Supabase's public API runs as `anon`/`authenticated`/`service_role`, and by default those roles get privileges on everything the owner creates, including EXECUTE on functions. Our sign-in logic is in database functions that trust their caller to be the app's own role. In a model of that setup, an anonymous caller could request a login code with a hash they chose, then log in (as admin, for an allowlisted address) with no email verification. Migration 005 revokes those privileges and makes new functions closed by default; `db:setup` now fails if any remain. As extra protection, if the dashboard lets you turn off the Data API (REST/GraphQL), do so: this app does not use it. I could not check the dashboard's wording or whether the platform can re-grant defaults later, so re-run `npm run db:setup:remote` after any Supabase configuration change; it repeats the check.
+- **TLS with the provider's CA.** With `DATABASE_CA_CERT` / `DATABASE_CA_CERT_FILE` set, the app and scripts verify the server's certificate chain **and** host name against that CA. Tested against a database using a private CA: no CA, a wrong CA, and a certificate for the wrong host name are all refused; the right CA connects.
+- **Pooling.** Every request runs in one transaction and sets the acting user with a transaction-local setting, the pattern that is safe behind a transaction pooler. Not yet tested on Supabase's pooler.
 
-Do **not** set: `DEV_ALLOWED_EMAIL` (the app refuses all sign-in if it is set in production), `DATABASE_ADMIN_URL`, or `APP_DB_PASSWORD` (owner credentials never go to Vercel). Do not add the `ekiben-demo.example` domain. Previews: leave the variables unset for Preview, so pull-request deployments build but cannot reach the database.
-3. Deploy. Done once from the CLI (`vercel deploy --prod`); after the Git connection works, every push to `main` deploys.
+## 4. Releasing and rollback
+- **Code-only change:** push to `main`. **With a migration:** migrations only move forward and never run on deploy; make the change backward-compatible with the live code, run `npm run db:setup:remote` first, then push. Never edit an applied migration; add a new numbered file. Run `npm test` and `npm run typecheck` before pushing.
+- **Bad deployment:** Vercel → Deployments → previous good deployment → **Instant Rollback** (or `vercel rollback <url>`). It re-points the domain without rebuilding, so environment variable changes are **not** applied, and while a rollback is active new pushes to `main` do not go live until you promote again (**Undo Rollback**, or `vercel promote <deployment>`). On Hobby only the immediately previous deployment is eligible ([docs](https://vercel.com/docs/deployments/instant-rollback)).
+- **Bad variable:** fix it in Settings and redeploy.
+- **Bad migration:** no automatic undo. Restore from Supabase's backups if your plan has them (check before inviting testers) or write a corrective migration.
+- **Stop access quickly:** `npm run admin:remote -- disable <email>` blocks one person immediately. To take the demo offline, remove `DATABASE_URL` in Vercel and redeploy, or delete the Vercel project.
+- **Rotate secrets:** change `AUTH_SECRET` (invalidates pending login codes only) and the SMTP password in Vercel; rotate the app database password by running `db:setup:remote` with a new `APP_DB_PASSWORD` and updating `DATABASE_URL`.
+- **CLI gotchas:** `vercel link` rewrote local `.env.local` and appended an `.env*` rule to `.gitignore`; both were reverted. `.vercelignore` keeps env files out of CLI uploads (checked: the upload contained `.env.example` only).
 
-**Gotchas seen with the Vercel CLI:** `vercel link` rewrote local `.env.local` (added a `VERCEL_OIDC_TOKEN` line) and appended an `.env*` rule to `.gitignore` that would hide `.env.example`; both were reverted by hand. `.vercelignore` keeps local env files out of CLI uploads (checked: the deployment contains `.env.example` only). Set Vercel env vars with `printf '%s' value | vercel env add NAME production`, which keeps secrets out of shell history and files.
+## 5. Verified before the real database exists
+Details and counts: [tracker-brief.md](tracker-brief.md).
+- The full test suite passes locally, and on a throwaway Postgres whose owner is a non-superuser with Supabase-style API roles present (2 tests skip there by design: they need to impersonate roles).
+- The Supabase-style exposure was reproduced (an anonymous caller became admin) and then blocked; the setup check was shown to fail when one grant is re-opened.
+- The setup and admin scripts, and the production app (`/api/health`), connect over TLS with a private CA only when the CA is supplied.
+- A production build with no environment variables; production-mode runs with SMTP delivery, `Secure; HttpOnly; SameSite=Lax` cookies, and the Chrome walkthrough at desktop and phone size (47 checks each).
 
-## 3. Verify the deployment
+## 6. Not verified (needs the real accounts)
+Supabase itself (role creation as its `postgres` user, its pooler in transaction mode, its certificate chain with the downloaded CA, the Data API setting, default privileges re-applied by the platform); a real SMTP provider and deliverability; push-to-deploy by an actual push; Vercel plan terms; backups and restore.
 
-1. `GET https://<your-url>/api/health` → `{"ok":true,"database":"connected","rowLevelSecurity":true}`. Any failure (including a privileged `DATABASE_URL`) returns `503 {"ok":false}`; the cause is in the Vercel function logs.
-2. Sign in with a real Ekiben address: the 6-digit code arrives by email; sign in; you land as a **member** unless the address is on the admin allowlist.
-3. With two accounts (one admin, one member), repeat the checks in [ACCESS.md](ACCESS.md): the member cannot see another member's unassigned project (a direct URL gives "Project not found"); the admin assigns a project to two people; the assignees can see it and update status and next step; history records every change; the weekly summary shows each person only their own projects.
-4. Use synthetic projects only. Do not enter real Ekiben, customer, or financial data without approval.
-
-**Confirm automatic deployments:** Vercel deploys every push to the production branch, and other branches and pull requests become preview deployments ([docs](https://vercel.com/docs/git)). To check it: push a small commit (for example a doc typo) to `main`, then open **Deployments** in the Vercel project. A new **Production** deployment should appear with that commit's message and SHA. Also check **Settings → Git** to confirm the repository is connected and the production branch is `main`. This cannot be confirmed until the project exists.
-
-## 4. Releasing changes
-- **Code-only change:** push to `main`; Vercel builds and promotes it.
-- **Change with a migration:** migrations only move forward. Make the migration backward-compatible with the code currently live, run `npm run db:setup` against the hosted database first, then push the code. Never edit an applied migration; add a new numbered file.
-- Run `npm test` and `npm run typecheck` before pushing.
-
-## 5. Rollback
-- **Bad deployment:** in Vercel, **Deployments → ⋯ on a previous good deployment → Instant Rollback** (or `vercel rollback <deployment-url>`). It re-points the production domain without rebuilding, so **environment variable changes are not applied by a rollback**, and while a rollback is active new pushes to `main` do **not** go live until you promote a deployment again (**Undo Rollback**, or `vercel promote <deployment>`). On the Hobby plan only the immediately previous deployment is eligible ([docs](https://vercel.com/docs/deployments/instant-rollback)).
-- **Bad environment variable:** fix it in Settings and redeploy (a rollback will not pick it up).
-- **Bad migration:** there is no automatic undo. Restore from the database provider's backup/point-in-time recovery if one exists, or write a new corrective migration. Check your provider's backup options before inviting testers.
-- **Stop access quickly:** `npm run admin -- disable <email>` blocks one person immediately. To take the whole demo offline, remove `DATABASE_URL` from Vercel and redeploy (the app then returns errors and no data is reachable), or pause/delete the project in the Vercel dashboard.
-- **Rotate secrets:** change `AUTH_SECRET` (signs out nobody directly but invalidates pending codes) and the SMTP password in Vercel and redeploy; change the database password with `npm run db:setup` (new `APP_DB_PASSWORD`) and update `DATABASE_URL`.
-
-## 6. What was verified before deployment
-Run locally; see [tracker-brief.md](tracker-brief.md) for the full, current list.
-- The existing 81 tests plus 4 for the health endpoint pass (85), also against a throwaway Postgres whose owner is **not a superuser** and cannot create databases.
-- `db:setup` applied all migrations to an existing database as that limited owner, and re-running it did nothing.
-- A production build runs with **no environment variables** at build time; served with `next start` it sent sign-in codes over real SMTP (to a local test receiver), set a `Secure; HttpOnly; SameSite=Lax` session cookie, and passed the same Chrome walkthrough at desktop and phone sizes as the dev build (47 checks each).
-- The SMTP implicit-TLS fix was reproduced against a TLS-only test server (old settings timed out; the fix delivered).
-
-## 7. Not verified (needs the real accounts)
-Hosting itself; the GitHub–Vercel connection and push-to-deploy; a real hosted Postgres (provider-specific role rules, pooler behavior in transaction mode, certificate checks); a real SMTP provider and deliverability (spam folders, sender verification); Vercel plan terms; backups and restore; behavior from a phone on real networks.
-
-## 8. Before any production use (not designed here)
-A named owner after the fellowship, who pays for and owns each account, backups and a tested restore, secret rotation, data retention, an incident contact, and whether to use Google/Microsoft sign-in instead of email codes. A password-protected preview or deployment-protection setting adds a layer but does not replace the app's own sign-in.
+## 7. Before any production use (not designed here)
+A named owner after the fellowship, who pays for and owns each account, backups and a tested restore, secret rotation, data retention, an incident contact, and whether to use Google/Microsoft sign-in instead of email codes. Deployment protection or a password adds a layer but does not replace the app's own sign-in.
