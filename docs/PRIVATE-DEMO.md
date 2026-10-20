@@ -1,27 +1,33 @@
 # Online demo on Vercel: setup, verification, rollback
 
-**Status: prepared, not deployed.** The app and database setup are ready and were rehearsed locally in production mode. Nothing has been created at Vercel, a database host, or an email provider, and nothing has been pushed to GitHub. Section 1 lists exactly what is needed from you.
+**Status (Oct 20, 2026): deployed but not yet usable, and not yet auto-deploying.**
+- Vercel project `ekiben-project-tracker` exists in the `abdalla-abdelmagids-projects` team (Hobby plan). A production deployment built in 23 s and is **Ready** at **https://ekiben-project-tracker.vercel.app**. Anyone can open the sign-in page (the production domain is public), but **sign-in cannot work** until a database and SMTP sender are configured. `/api/health` returns `503 {"ok":false}`; the Vercel runtime log says `DATABASE_URL is not set`.
+- **GitHub auto-deploy is not connected.** `vercel git connect` fails ("Failed to connect Abdalla2024/projectTracker"). Most likely the Vercel GitHub app has no access to this new repo; see section 1, item 2. Until then, pushes to `main` do **not** deploy.
+- Production environment variables set so far: `AUTH_SECRET` (new, generated and sent straight to Vercel), `ALLOWED_EMAIL_DOMAINS=ekibenbaltimore.com` (provisional until Ekiben confirms), `APP_TIME_ZONE`, `DATABASE_POOL_MAX=3`, `EMAIL_TRANSPORT=smtp`. Still missing: `DATABASE_URL`, `EMAIL_FROM`, `SMTP_*`.
 
 The demo uses the existing app and its PostgreSQL security model (row-level security, triggers, restricted role). It does not need a rewrite or another database product, but it does need a **hosted PostgreSQL** and an **SMTP sender**, because a serverless host has no local database and the sign-in code must be emailed.
 
-## 1. What you need to provide
+## 1. What is still needed
 
-| # | Needed | Why it blocks | Default I recommend |
+| # | Needed | Why | Default I recommend |
 |---|---|---|---|
-| 1 | **Decision on the commit author email.** All 11 local commits carry your personal Gmail address as author, and the GitHub repo is public. Pushing publishes it permanently. | Vercel deploys from GitHub, so something must be pushed | Switch the repo identity to your GitHub no-reply address (below), then push. Or make the repo private first. |
-| 2 | A **Vercel account** (log in at vercel.com with GitHub), and to approve the Vercel GitHub app on this repo | Projects can't be created or connected without it | Team/plan: see the note on plans below |
-| 3 | A **hosted PostgreSQL** you approve and own (a plain managed Postgres is simplest), plus two connection strings: an **owner** URL (direct) and a **pooled** URL | The app needs a database | Any provider that supports roles, row-level security, triggers, and TLS |
-| 4 | An **SMTP provider** and a verified sender address (host, port, user, password) | Sign-in codes are sent by email; there is no other login | Any SMTP service you already use |
-| 5 | The **admin emails**, sent privately | Admins come only from the allowlist; I will not invent any | Give them when ready; I will not commit them |
-| 6 | Confirmation that **`ekibenbaltimore.com`** is the right domain | It is a provisional value | Single domain |
+| 1 | **Decision on the commit author email.** The 14 commits pushed on Oct 20 show your personal Gmail as the author in the **public** repo. Removing it now means rewriting history and force-pushing; copies, forks and caches may remain. | Privacy | Decide whether that matters; commits made after that use the GitHub no-reply address (see below) |
+| 2 | **Give Vercel access to the repo.** GitHub → Settings → Applications → Installed GitHub Apps → **Vercel** → Configure → under Repository access, add `projectTracker` (or choose All repositories) → Save. If Vercel isn't listed, install it from the Vercel project's Settings → Git. | The connection fails without it, so pushes can't deploy | Then I rerun `vercel git connect` and test a push |
+| 3 | A **hosted PostgreSQL** you approve and own, with an **owner** URL (direct) and a **pooled** URL | The app needs a database | Any provider with roles, row-level security, triggers, TLS |
+| 4 | An **SMTP provider** and a verified sender address (host, port, user, password) | Sign-in codes are emailed; there is no other login | Any SMTP service you already use |
+| 5 | The **admin emails**, sent privately | Admins come only from the allowlist; none are invented | Give them when ready |
+| 6 | Ekiben's confirmation that **`ekibenbaltimore.com`** is the right domain | It is configured, but provisional | Single domain |
 
-Commands for item 1 (not run; they rewrite your 11 unpushed commits, which only you should approve):
+**Plan note:** the project is on a Hobby plan. As I understand Vercel's terms, Hobby is for personal, non-commercial use, and a business demo may need a paid plan. Check Vercel's current terms. (Also, a Hobby team cannot deploy from a private repository owned by a GitHub organization: [Vercel Git docs](https://vercel.com/docs/git).)
+
+**Protection, as observed:** the production domain answers anonymously (HTTP 200) so testers need no Vercel login. The unique per-deployment URLs redirect to a Vercel login (HTTP 302). Both are public-facing only as far as the app's own sign-in, which stays in force.
+
+Only for item 1, if you choose to scrub the address (not run; they rewrite history and need a force-push, so only you should approve). For future commits, set the identity first:
 ```bash
 git config user.email "161538926+Abdalla2024@users.noreply.github.com"   # the address your first commit used
-git rebase --exec 'git commit --amend --no-edit --reset-author' origin/main
-git log --format='%h %ae' origin/main..HEAD                              # confirm every line shows the no-reply address
+# To rewrite already-pushed commits you would additionally need: git rebase --root --exec 'git commit --amend --no-edit --reset-author', then git push --force-with-lease
 ```
-As a further safeguard, GitHub has (as I recall; confirm in your GitHub email settings) an option to block command-line pushes that expose your private email address.
+As a further safeguard, GitHub has (as I recall; confirm in your GitHub email settings) an option to block command-line pushes that expose your private email address. The new commit `d9c0328` already uses the no-reply address.
 
 **Plan note (verify before you sign up):** as I understand Vercel's terms, the free Hobby plan is for personal, non-commercial use, and a business demo may need a paid plan. Check Vercel's current terms. Also, a Hobby team cannot deploy from a private repository owned by a GitHub organization ([Vercel Git docs](https://vercel.com/docs/git)).
 
@@ -43,7 +49,7 @@ As a further safeguard, GitHub has (as I recall; confirm in your GitHub email se
    ```
 5. Make admins (after you provide the emails): `DATABASE_ADMIN_URL=… npm run admin -- grant person@ekibenbaltimore.com`. Admin changes always use the owner URL from a trusted machine, never from Vercel.
 
-**B. Vercel project**
+**B. Vercel project** (steps 1 and the non-database variables are already done; see Status)
 1. Vercel dashboard → **Add New → Project → Import Git Repository** → pick `Abdalla2024/projectTracker`. Framework is detected as Next.js; keep the default build command (`npm run build`) and output. Production branch: `main`.
 2. Before the first deploy, add the environment variables below under **Settings → Environment Variables**, scoped to **Production** only. Mark secrets as Sensitive.
 
@@ -59,7 +65,9 @@ As a further safeguard, GitHub has (as I recall; confirm in your GitHub email se
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | from your provider. Port 587 uses STARTTLS; port 465 uses implicit TLS (handled by the app) |
 
 Do **not** set: `DEV_ALLOWED_EMAIL` (the app refuses all sign-in if it is set in production), `DATABASE_ADMIN_URL`, or `APP_DB_PASSWORD` (owner credentials never go to Vercel). Do not add the `ekiben-demo.example` domain. Previews: leave the variables unset for Preview, so pull-request deployments build but cannot reach the database.
-3. Deploy. The first deploy builds from `main`.
+3. Deploy. Done once from the CLI (`vercel deploy --prod`); after the Git connection works, every push to `main` deploys.
+
+**Gotchas seen with the Vercel CLI:** `vercel link` rewrote local `.env.local` (added a `VERCEL_OIDC_TOKEN` line) and appended an `.env*` rule to `.gitignore` that would hide `.env.example`; both were reverted by hand. `.vercelignore` keeps local env files out of CLI uploads (checked: the deployment contains `.env.example` only). Set Vercel env vars with `printf '%s' value | vercel env add NAME production`, which keeps secrets out of shell history and files.
 
 ## 3. Verify the deployment
 
