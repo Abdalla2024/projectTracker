@@ -28,7 +28,7 @@ describe("migration 003: remove stores", () => {
     await migrateToLatest();
     await migrateToLatest();
     expect((await owner.query("select name from schema_migrations order by name")).rows.map((r) => r.name)).toEqual([
-      "001_schema.sql", "002_security.sql", "003_remove_stores.sql",
+      "001_schema.sql", "002_security.sql", "003_remove_stores.sql", "004_dev_exact_email.sql",
     ]);
   });
 

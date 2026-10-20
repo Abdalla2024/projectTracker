@@ -25,3 +25,28 @@ describe("checkEmail", () => {
     expect(checkEmail("a@example-org.test", []).ok).toBe(false);
   });
 });
+
+describe("checkEmail with a local-dev exact-address exception", () => {
+  // Synthetic: a "consumer" mail domain that is NOT in the allowed domains.
+  const exact = ["Dev.Person@mail.example"];
+
+  it("accepts exactly that address, case-insensitively and trimmed", () => {
+    for (const e of ["dev.person@mail.example", "  DEV.PERSON@MAIL.EXAMPLE  "]) {
+      expect(checkEmail(e, domains, exact), e).toEqual({ ok: true, email: "dev.person@mail.example" });
+    }
+  });
+  it("does not open the rest of that domain", () => {
+    for (const e of ["other.person@mail.example", "dev.person2@mail.example", "xdev.person@mail.example", "dev.person@mail.example.evil.com"]) {
+      expect(checkEmail(e, domains, exact).ok, e).toBe(false);
+    }
+  });
+  it("rejects plus aliases of that address", () => {
+    expect(checkEmail("dev.person+tag@mail.example", domains, exact).ok).toBe(false);
+  });
+  it("changes nothing for allowed domains, and nothing when no exception is configured", () => {
+    expect(checkEmail("a@example-org.test", domains, exact).ok).toBe(true);
+    expect(checkEmail("dev.person@mail.example", domains, []).ok).toBe(false);
+    expect(checkEmail("dev.person@mail.example", domains).ok).toBe(false);
+  });
+});
+

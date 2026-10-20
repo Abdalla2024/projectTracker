@@ -4,7 +4,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  LOGIN_CODE_TTL_SECONDS, SESSION_COOKIE, SESSION_TTL_SECONDS, allowedDomains, authSecret, isProduction,
+  LOGIN_CODE_TTL_SECONDS, SESSION_COOKIE, SESSION_TTL_SECONDS, allowedDomains, authSecret, devAllowedEmails, isProduction,
 } from "./config";
 import { withoutUser } from "./db";
 import { checkEmail } from "./email-address";
@@ -23,7 +23,7 @@ const hashCode = (email: string, code: string) => createHmac("sha256", authSecre
 export type RequestCodeResult = { ok: true; email: string } | { ok: false; error: string };
 
 export async function requestLoginCode(emailInput: string): Promise<RequestCodeResult> {
-  const check = checkEmail(emailInput, allowedDomains());
+  const check = checkEmail(emailInput, allowedDomains(), devAllowedEmails());
   if (!check.ok) return { ok: false, error: check.reason };
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -38,14 +38,14 @@ export async function requestLoginCode(emailInput: string): Promise<RequestCodeR
 }
 
 export async function verifyLoginCode(emailInput: string, codeInput: string): Promise<boolean> {
-  const check = checkEmail(emailInput, allowedDomains());
+  const check = checkEmail(emailInput, allowedDomains(), devAllowedEmails());
   const code = codeInput.replace(/\s/g, "");
   if (!check.ok || !/^\d{6}$/.test(code)) return false;
 
   const token = randomBytes(32).toString("base64url");
   const userId = await withoutUser(async (c) =>
-    (await c.query("select auth_verify_and_login($1, $2, $3, $4, $5) as id", [
-      check.email, hashCode(check.email, code), allowedDomains(), sha256(token), SESSION_TTL_SECONDS,
+    (await c.query("select auth_verify_and_login($1, $2, $3, $4, $5, $6) as id", [
+      check.email, hashCode(check.email, code), allowedDomains(), sha256(token), SESSION_TTL_SECONDS, devAllowedEmails(),
     ])).rows[0].id as string | null,
   );
   if (!userId) return false;

@@ -84,3 +84,70 @@ describe("login codes and sessions", () => {
     await expect(asUser(null, (c) => c.query("select * from admin_emails"))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("exact-email exception at the database (same function as the domain check)", () => {
+  // Synthetic: mail.example is not an allowed domain here (DOMAINS = tracker.test).
+  const EXACT = ["dev.person@mail.example"];
+  const loginWith = (email: string, emails: string[], session = `s-${Math.random()}`) =>
+    app.query("select auth_verify_and_login($1,$2,$3,$4,3600,$5) as id", [email, "hash-ok", DOMAINS, session, emails]).then((r) => r.rows[0].id as string | null);
+
+  it("signs in exactly that address (any case / padding) and creates a MEMBER", async () => {
+    await age();
+    await request("dev.person@mail.example");
+    expect(await loginWith("  Dev.Person@MAIL.example ", EXACT, "tok-dev")).toBeTruthy();
+    const me = (await app.query("select email, role from auth_resolve_session('tok-dev')")).rows[0];
+    expect(me).toEqual({ email: "dev.person@mail.example", role: "member" });
+  });
+
+  it("does not open the rest of the domain or any other address", async () => {
+    for (const e of ["other.person@mail.example", "dev.person2@mail.example", "dev.person@mail.example.evil.com", "x@sub.mail.example"]) {
+      await age();
+      await request(e);
+      expect(await loginWith(e, EXACT), e).toBeNull();
+    }
+    expect((await owner.query("select count(*)::int n from profiles where email like '%@mail.example' and email <> 'dev.person@mail.example'")).rows[0].n).toBe(0);
+  });
+
+  it("rejects plus aliases of the exact address even with a valid code", async () => {
+    await age();
+    await request("dev.person+tag@mail.example");
+    expect(await loginWith("dev.person+tag@mail.example", EXACT)).toBeNull();
+    expect((await owner.query("select count(*)::int n from profiles where email like 'dev.person+%'")).rows[0].n).toBe(0);
+  });
+
+  it("is off when no exception is passed (the default, and what production sends)", async () => {
+    await age();
+    await request("dev.person@mail.example");
+    // The account already exists from the first test, yet without the exception it cannot sign in.
+    expect(await loginWith("dev.person@mail.example", [], "tok-off")).toBeNull();
+    expect(await loginWith("dev.person@mail.example", [])).toBeNull();
+  });
+
+  it("an exception gives no admin rights: admin still comes only from the allowlist", async () => {
+    await age();
+    await request("dev.person@mail.example");
+    const id = await loginWith("dev.person@mail.example", EXACT, "tok-role");
+    expect(id).toBeTruthy();
+    expect((await owner.query("select role from profiles where id = $1", [id])).rows[0].role).toBe("member");
+    await owner.query("insert into admin_emails (email) values ('dev.person@mail.example')");
+    expect((await owner.query("select role from profiles where id = $1", [id])).rows[0].role).toBe("admin");
+    await owner.query("delete from admin_emails where email = 'dev.person@mail.example'");
+  });
+
+  it("keeps the existing code rules: wrong code fails and locks after 5 tries", async () => {
+    await age();
+    await request("dev.person@mail.example");
+    for (let i = 0; i < 5; i++) {
+      const r = await app.query("select auth_verify_and_login($1,$2,$3,$4,3600,$5) as id", ["dev.person@mail.example", "wrong", DOMAINS, `s-${i}`, EXACT]);
+      expect(r.rows[0].id).toBeNull();
+    }
+    expect(await loginWith("dev.person@mail.example", EXACT)).toBeNull();
+  });
+
+  it("keeps the request throttle for the exact address", async () => {
+    await age();
+    expect(await request("dev.person@mail.example")).toBe("ok");
+    expect(await request("dev.person@mail.example")).toBe("throttled");
+  });
+});
+

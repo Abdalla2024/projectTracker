@@ -12,7 +12,7 @@ const APP_URL = (() => {
 const env = process.env as Record<string, string | undefined>;
 const saved = { ...env };
 afterEach(() => {
-  for (const k of ["DATABASE_URL", "EMAIL_TRANSPORT", "NODE_ENV", "AUTH_SECRET"]) {
+  for (const k of ["DATABASE_URL", "EMAIL_TRANSPORT", "NODE_ENV", "AUTH_SECRET", "DEV_ALLOWED_EMAIL"]) {
     if (saved[k] === undefined) delete env[k];
     else env[k] = saved[k];
   }
@@ -69,3 +69,44 @@ describe("email transport and secrets", () => {
     expect(() => authSecret()).toThrow(/AUTH_SECRET/);
   });
 });
+
+describe("local-dev exact email exception (DEV_ALLOWED_EMAIL)", () => {
+  it("is off when unset or blank", async () => {
+    const { devAllowedEmails } = await import("@/lib/config");
+    delete env.DEV_ALLOWED_EMAIL;
+    expect(devAllowedEmails()).toEqual([]);
+    env.DEV_ALLOWED_EMAIL = "   ";
+    expect(devAllowedEmails()).toEqual([]);
+  });
+
+  it("yields the one address, lowercased and trimmed, outside production", async () => {
+    const { devAllowedEmails } = await import("@/lib/config");
+    env.NODE_ENV = "development";
+    env.DEV_ALLOWED_EMAIL = "  Dev.Person@Mail.Example ";
+    expect(devAllowedEmails()).toEqual(["dev.person@mail.example"]);
+  });
+
+  it("is refused in production, even though it is set to a valid address", async () => {
+    const { devAllowedEmails } = await import("@/lib/config");
+    env.NODE_ENV = "production";
+    env.DEV_ALLOWED_EMAIL = "dev.person@mail.example";
+    expect(() => devAllowedEmails()).toThrow(/local development only/);
+  });
+
+  it("is harmless in production when unset", async () => {
+    const { devAllowedEmails } = await import("@/lib/config");
+    env.NODE_ENV = "production";
+    delete env.DEV_ALLOWED_EMAIL;
+    expect(devAllowedEmails()).toEqual([]);
+  });
+
+  it("refuses values that would widen it: a domain, a wildcard, a list, a plus alias", async () => {
+    const { devAllowedEmails } = await import("@/lib/config");
+    env.NODE_ENV = "development";
+    for (const bad of ["mail.example", "@mail.example", "*@mail.example", "a@mail.example,b@mail.example", "a@mail.example b@mail.example", "dev+tag@mail.example", "dev@localhost"]) {
+      env.DEV_ALLOWED_EMAIL = bad;
+      expect(() => devAllowedEmails(), bad).toThrow(/DEV_ALLOWED_EMAIL/);
+    }
+  });
+});
+

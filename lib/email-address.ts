@@ -10,8 +10,11 @@ export function parseAllowedDomains(raw: string | undefined): string[] {
 
 export type EmailCheck = { ok: true; email: string } | { ok: false; reason: string };
 
-/** Exact domain match only (no subdomains), no plus-addressing, a single "@". */
-export function checkEmail(input: string, allowedDomains: string[]): EmailCheck {
+/**
+ * Allowed if the domain matches exactly (no subdomains) OR the whole address equals one of
+ * `allowedEmails` (the local-dev exact-address exception). Never allows plus-addressing; one "@".
+ */
+export function checkEmail(input: string, allowedDomains: string[], allowedEmails: string[] = []): EmailCheck {
   const email = input.trim().toLowerCase();
   if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return { ok: false, reason: "Enter a valid email address." };
@@ -20,7 +23,8 @@ export function checkEmail(input: string, allowedDomains: string[]): EmailCheck 
   if (local.includes("+")) {
     return { ok: false, reason: "Use your main work email address without a + alias." };
   }
-  if (allowedDomains.length === 0 || !allowedDomains.includes(domain)) {
+  const exact = allowedEmails.some((e) => e.trim().toLowerCase() === email);
+  if (!exact && (allowedDomains.length === 0 || !allowedDomains.includes(domain))) {
     return { ok: false, reason: "Sign-in is limited to Ekiben email addresses." };
   }
   return { ok: true, email };

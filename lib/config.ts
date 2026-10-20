@@ -29,3 +29,21 @@ export function emailTransport(): EmailTransport {
   }
   return t;
 }
+
+/**
+ * Local-development exception: ONE exact email address allowed to sign in besides the allowed domains
+ * (env DEV_ALLOWED_EMAIL). It is never a domain and never a list, and it is refused in production
+ * (loudly, like the console email transport) so it cannot be switched on there by accident.
+ */
+export function devAllowedEmails(): string[] {
+  const raw = process.env.DEV_ALLOWED_EMAIL?.trim();
+  if (!raw) return [];
+  if (isProduction()) {
+    throw new Error("DEV_ALLOWED_EMAIL is for local development only and is refused when NODE_ENV=production.");
+  }
+  const email = raw.toLowerCase();
+  if (!/^[a-z0-9._%-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(email)) {
+    throw new Error("DEV_ALLOWED_EMAIL must be one full email address (no domain-only value, list, or + alias).");
+  }
+  return [email];
+}

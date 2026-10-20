@@ -63,6 +63,7 @@ All settings are environment variables; see [.env.example](.env.example) (placeh
 | `DATABASE_URL` | Restricted `tracker_app` role used by the web app. The app refuses to start queries on a superuser/owner connection |
 | `APP_DB_PASSWORD` | Password `db:setup` gives the `tracker_app` role |
 | `ALLOWED_EMAIL_DOMAINS` | Comma-separated. **`ekibenbaltimore.com` is a provisional value — confirm with Ekiben** |
+| `DEV_ALLOWED_EMAIL` | **Local development only.** One exact full email address allowed to sign in besides the allowed domains (set it in `.env.local` only). Not a domain or list; plus aliases still rejected; account is still a member; refused when `NODE_ENV=production` |
 | `AUTH_SECRET` | Random string used to hash login codes |
 | `APP_TIME_ZONE` | Reporting time zone (default `America/New_York`, handles daylight saving) |
 | `EMAIL_TRANSPORT` | `console` (local dev only; refused in production) or `smtp` (+ `SMTP_*`, `EMAIL_FROM`) |
