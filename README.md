@@ -2,7 +2,7 @@
 
 An internal web app for tracking company projects at Ekiben (a Baltimore restaurant group) — including the work done during the AI Builder fellowship. Staff sign in with a verified Ekiben email address, create projects, and comment on them; admins see everything, assign projects to one or more people, and attach stores. A weekly summary compares where every project stood at Monday 12:00 AM (America/New_York) with where it stands now.
 
-Project context, requirements with evidence, decisions and open questions: [docs/tracker-brief.md](docs/tracker-brief.md). Contributor guidance: [CLAUDE.md](CLAUDE.md).
+Project context, requirements, decisions, open questions, and what is unverified: [docs/tracker-brief.md](docs/tracker-brief.md). Contributor guidance: [CLAUDE.md](CLAUDE.md).
 
 **Status: initial demo.** Built to run locally and to be shown to Ekiben. Production deployment is a separate, deliberate decision (see [docs/PRIVATE-DEMO.md](docs/PRIVATE-DEMO.md)).
 
