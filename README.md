@@ -1,6 +1,6 @@
 # Ekiben Project Tracker (demo)
 
-An internal web app for tracking company projects at Ekiben (a Baltimore restaurant group) — including the work done during the AI Builder fellowship. Staff sign in with a verified Ekiben email address, create projects, and comment on them; admins see everything, assign projects to one or more people, and attach stores. A weekly summary compares where every project stood at Monday 12:00 AM (America/New_York) with where it stands now.
+An internal web app for tracking company projects at Ekiben (a Baltimore restaurant group) — including the work done during the AI Builder fellowship. Staff sign in with a verified Ekiben email address, create projects, and comment on them; admins see everything and assign projects to one or more people. A weekly summary compares where every project stood at Monday 12:00 AM (America/New_York) with where it stands now.
 
 Project context, requirements, decisions, open questions, and what is unverified: [docs/tracker-brief.md](docs/tracker-brief.md). Contributor guidance: [CLAUDE.md](CLAUDE.md).
 
@@ -30,6 +30,8 @@ npm run db:setup                    # creates the database + restricted app role
 npm run db:seed-demo                # optional: synthetic demo accounts and projects
 npm run dev                         # http://localhost:3000
 ```
+
+**Upgrading an older local database** (from before store selection was removed): `npm run db:setup` applies migration 003, which drops the store tables and links but keeps existing history rows; then `npm run db:seed-demo -- --reset` refreshes the demo data.
 
 **Signing in locally:** with `EMAIL_TRANSPORT=console` no email is sent. Enter an email, then read the 6-digit code from the terminal running `npm run dev`. To sign in as the synthetic demo users, add `ekiben-demo.example` to `ALLOWED_EMAIL_DOMAINS` **in your local `.env.local` only**:
 
@@ -78,15 +80,16 @@ docs/                 ACCESS.md, ADMIN.md, PRIVATE-DEMO.md
 
 ## What is tested
 
-`npm test` runs 59 checks in 6 files against a real throwaway Postgres, as the same restricted role the app uses:
+`npm test` runs 65 checks in 7 files against a real throwaway Postgres, as the same restricted role the app uses:
 - [tests/access.test.ts](tests/access.test.ts) — who can see/change what (members, assignees, admins, disabled users, no-user), role cannot be self-assigned, history is written with every change and cannot be edited, failed changes leave no history.
 - [tests/auth.test.ts](tests/auth.test.ts) — login codes (one-time, expiry, attempt lock, throttle), domain enforcement, admin allowlist, disabled users, session end.
 - [tests/summary.test.ts](tests/summary.test.ts), [tests/time.test.ts](tests/time.test.ts) — start-of-week vs now reconstruction, deadline flags, Monday boundary, both daylight-saving transitions.
+- [tests/remove-stores.test.ts](tests/remove-stores.test.ts) — upgrading a database that had store data through migration 003 (history kept, feature removed).
 - [tests/email-address.test.ts](tests/email-address.test.ts), [tests/config-guards.test.ts](tests/config-guards.test.ts) — email/domain rules, refusal of privileged DB connections and of dev-only email in production.
 
 ## Known limitations (initial demo)
 
-- No in-app screens for managing admins, users, or stores — those are scripts/SQL by design (see ADMIN.md). Store list is provisional (Fells Point, Hampden, South Baltimore, Catering), set in migration 001.
+- No in-app screens for managing admins or users — those are scripts by design (see ADMIN.md).
 - A person appears in the assignee picker only after signing in once. Display names are derived from the email (`jane.doe@…` → "Jane Doe"); there is no profile editing yet.
 - Comments can't be edited or deleted; projects are archived/cancelled, never deleted.
 - The weekly summary is an in-app page only (no email/Slack). It is deterministic (no AI), and a person should review it before it is shared outside the app.

@@ -33,7 +33,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
         ) : (
           <table className="stack">
             <thead>
-              <tr><th>Project</th><th>Status</th><th>Priority</th><th>Deadline</th><th>Assigned to</th><th>Stores</th><th>Updated</th></tr>
+              <tr><th>Project</th><th>Status</th><th>Priority</th><th>Deadline</th><th>Assigned to</th><th>Updated</th></tr>
             </thead>
             <tbody>
               {projects.map((p) => {
@@ -50,7 +50,6 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
                     <td data-label="Priority"><span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]}</span></td>
                     <td data-label="Deadline">{p.deadline ? formatDate(p.deadline) : "—"}{overdue ? <> <span className="chip bad">overdue</span></> : null}</td>
                     <td data-label="Assigned to">{p.assignees.length ? p.assignees.join(", ") : <span className="muted">unassigned</span>}</td>
-                    <td data-label="Stores">{p.stores.length ? p.stores.join(", ") : "—"}</td>
                     <td className="muted" data-label="Updated">{formatDateTime(p.updated_at, zone)}</td>
                   </tr>
                 );

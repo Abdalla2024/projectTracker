@@ -18,7 +18,6 @@ export interface ProjectListItem {
   created_by: string;
   creator_name: string;
   assignees: string[];
-  stores: string[];
 }
 
 export interface Person { id: string; name: string; email?: string }
@@ -37,7 +36,6 @@ export interface ProjectDetail {
   created_by: string;
   creator_name: string;
   assignees: Person[];
-  stores: Person[];
   comments: { id: string; author_name: string; body: string; created_at: Date }[];
   events: (EventRow & { actor_name: string })[];
 }
@@ -54,10 +52,7 @@ export async function listProjects(userId: string, includeArchived: boolean): Pr
               p.updated_at, p.created_by, cr.display_name as creator_name,
               coalesce((select json_agg(pr.display_name order by pr.display_name)
                         from project_assignees a join profiles pr on pr.id = a.user_id
-                        where a.project_id = p.id), '[]') as assignees,
-              coalesce((select json_agg(s.name order by s.sort_order)
-                        from project_stores ps join stores s on s.id = ps.store_id
-                        where ps.project_id = p.id), '[]') as stores
+                        where a.project_id = p.id), '[]') as assignees
        from projects p join profiles cr on cr.id = p.created_by
        where ($1 or p.archived_at is null)
        order by (p.status in ('done','cancelled')), p.deadline nulls last, p.updated_at desc`,
@@ -79,19 +74,19 @@ export async function getProjectDetail(userId: string, id: string): Promise<Proj
       )
     ).rows[0];
     if (!p) return null;
-    const [assignees, stores, comments, events] = await Promise.all([
-      c.query(`select pr.id, pr.display_name as name, pr.email from project_assignees a join profiles pr on pr.id = a.user_id
-               where a.project_id = $1 order by pr.display_name`, [id]),
-      c.query(`select s.id, s.name from project_stores ps join stores s on s.id = ps.store_id
-               where ps.project_id = $1 order by s.sort_order`, [id]),
-      c.query(`select c.id, pr.display_name as author_name, c.body, c.created_at from comments c
-               join profiles pr on pr.id = c.author_id where c.project_id = $1 order by c.created_at, c.id`, [id]),
-      c.query(`select e.id, e.project_id, e.event_type, e.field, e.old_value, e.new_value, e.subject_id, e.occurred_at,
-                      pr.display_name as actor_name
-               from project_events e join profiles pr on pr.id = e.actor_id
-               where e.project_id = $1 order by e.occurred_at desc, e.id desc`, [id]),
-    ]);
-    return { ...p, assignees: assignees.rows, stores: stores.rows, comments: comments.rows, events: events.rows };
+    // One connection runs one query at a time (pg deprecates overlapping queries), so these are sequential.
+    const assignees = await c.query(
+      `select pr.id, pr.display_name as name, pr.email from project_assignees a join profiles pr on pr.id = a.user_id
+       where a.project_id = $1 order by pr.display_name`, [id]);
+    const comments = await c.query(
+      `select c.id, pr.display_name as author_name, c.body, c.created_at from comments c
+       join profiles pr on pr.id = c.author_id where c.project_id = $1 order by c.created_at, c.id`, [id]);
+    const events = await c.query(
+      `select e.id, e.project_id, e.event_type, e.field, e.old_value, e.new_value, e.subject_id, e.occurred_at,
+              pr.display_name as actor_name
+       from project_events e join profiles pr on pr.id = e.actor_id
+       where e.project_id = $1 order by e.occurred_at desc, e.id desc`, [id]);
+    return { ...p, assignees: assignees.rows, comments: comments.rows, events: events.rows };
   });
 }
 
@@ -99,12 +94,6 @@ export async function getProjectDetail(userId: string, id: string): Promise<Proj
 export async function listPeople(userId: string): Promise<Person[]> {
   return withUser(userId, async (c) =>
     (await c.query("select id, display_name as name, email from profiles where not disabled order by display_name")).rows,
-  );
-}
-
-export async function listStores(userId: string): Promise<Person[]> {
-  return withUser(userId, async (c) =>
-    (await c.query("select id, name from stores where active order by sort_order, name")).rows,
   );
 }
 
@@ -117,7 +106,6 @@ export interface NewProject {
   next_step: string;
   /** Honored only for admins; the database refuses it otherwise. */
   assigneeIds: string[];
-  storeIds: string[];
 }
 
 export async function createProject(user: { id: string; role: string }, input: NewProject): Promise<string> {
@@ -130,7 +118,6 @@ export async function createProject(user: { id: string; role: string }, input: N
     const id: string = r.rows[0].id;
     if (user.role === "admin") {
       await replaceAssignees(c, id, input.assigneeIds, user.id);
-      await replaceStores(c, id, input.storeIds);
     }
     return id;
   });
@@ -167,22 +154,8 @@ async function replaceAssignees(c: pg.PoolClient, projectId: string, wanted: str
   }
 }
 
-async function replaceStores(c: pg.PoolClient, projectId: string, wanted: string[]) {
-  const current = (await c.query("select store_id from project_stores where project_id = $1", [projectId])).rows.map((r) => r.store_id as string);
-  const want = new Set(wanted);
-  for (const sid of current.filter((s) => !want.has(s))) {
-    await c.query("delete from project_stores where project_id = $1 and store_id = $2", [projectId, sid]);
-  }
-  for (const sid of wanted.filter((s) => !current.includes(s))) {
-    await c.query("insert into project_stores (project_id, store_id) values ($1,$2)", [projectId, sid]);
-  }
-}
-
-export async function setAssignmentsAndStores(userId: string, id: string, assigneeIds: string[], storeIds: string[]): Promise<void> {
-  await withUser(userId, async (c) => {
-    await replaceAssignees(c, id, assigneeIds, userId);
-    await replaceStores(c, id, storeIds);
-  });
+export async function setAssignees(userId: string, id: string, assigneeIds: string[]): Promise<void> {
+  await withUser(userId, (c) => replaceAssignees(c, id, assigneeIds, userId));
 }
 
 export async function addComment(userId: string, id: string, body: string): Promise<void> {
@@ -198,9 +171,7 @@ export async function loadSummaryData(userId: string, since: Date): Promise<{ pr
       await c.query(
         `select p.id, p.name, p.status, p.priority, p.deadline::text as deadline, p.next_step, p.archived_at, p.created_at,
                 coalesce((select json_agg(json_build_object('id', pr.id, 'name', pr.display_name))
-                          from project_assignees a join profiles pr on pr.id = a.user_id where a.project_id = p.id), '[]') as assignees,
-                coalesce((select json_agg(json_build_object('id', s.id, 'name', s.name))
-                          from project_stores ps join stores s on s.id = ps.store_id where ps.project_id = p.id), '[]') as stores
+                          from project_assignees a join profiles pr on pr.id = a.user_id where a.project_id = p.id), '[]') as assignees
          from projects p`,
       )
     ).rows as ProjectRow[];

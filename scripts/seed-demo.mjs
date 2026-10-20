@@ -34,7 +34,7 @@ const demoUsers = [
   { key: "m3", email: `demo.member3@${DEMO_DOMAIN}`, name: "Demo Member Three (synthetic)" },
 ];
 
-const triggerTables = ["projects", "project_events", "comments", "project_assignees", "project_stores"];
+const triggerTables = ["projects", "project_events", "comments", "project_assignees"];
 
 async function resetDemo() {
   await client.query("begin");
@@ -44,7 +44,6 @@ async function resetDemo() {
     await client.query(`delete from project_events where project_id in (${ids})`);
     await client.query(`delete from comments where project_id in (${ids})`);
     await client.query(`delete from project_assignees where project_id in (${ids})`);
-    await client.query(`delete from project_stores where project_id in (${ids})`);
     await client.query(`delete from projects where id in (${ids})`);
     for (const t of triggerTables) await client.query(`alter table ${t} enable trigger user`);
     await client.query("commit");
@@ -75,7 +74,6 @@ try {
     );
     id[u.key] = r.rows[0].id;
   }
-  const storeId = Object.fromEntries((await client.query("select id, name from stores")).rows.map((r) => [r.name, r.id]));
 
   // Time layout: "old" events sit before this week's Monday 00:00; "this week" events are spread
   // between Monday 00:00 and now, so the summary always has a start-vs-now difference to show.
@@ -112,21 +110,20 @@ try {
       [p.name, p.description ?? "", p.status ?? "not_started", p.priority ?? "normal", p.deadline ?? null, p.next_step ?? "", id[actor]],
     )).rows[0].id;
   const assign = (c, pid, ...keys) => Promise.all(keys.map((k) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [pid, id[k], id.admin])));
-  const storesFor = (c, pid, ...names) => Promise.all(names.map((n) => c.query("insert into project_stores (project_id, store_id) values ($1,$2)", [pid, storeId[n]])));
   const comment = (c, pid, actor, body) => c.query("insert into comments (project_id, author_id, body) values ($1,$2,$3)", [pid, id[actor], body]);
   const set = (c, pid, sql, ...vals) => c.query(`update projects set ${sql} where id = $1`, [pid, ...vals]);
   const P = {};
 
-  // 1. Opening checklist: created by a member, later assigned by the admin to two members at two stores.
+  // 1. Opening checklist: created by a member, later assigned by the admin to two members.
   await step(old(9), "m1", async (c) => { P.checklist = await newProject(c, "m1", { name: "[DEMO] Refresh the opening checklist", description: "Synthetic example project.", next_step: "Draft new checklist" }); });
-  await step(old(9, 1), "admin", async (c) => { await assign(c, P.checklist, "m1", "m2"); await storesFor(c, P.checklist, "Hampden", "Fells Point"); });
+  await step(old(9, 1), "admin", (c) => assign(c, P.checklist, "m1", "m2"));
   await step(old(8), "m1", (c) => set(c, P.checklist, "status = 'in_progress'"));
-  await step(week(0.3), "m2", (c) => set(c, P.checklist, "next_step = $2", "Trial the checklist at one store"));
+  await step(week(0.3), "m2", (c) => set(c, P.checklist, "next_step = $2", "Trial the checklist on one shift"));
   await step(week(0.35), "admin", (c) => comment(c, P.checklist, "admin", "Looks good. Please share a photo of the trial run."));
 
   // 2. Catering layout: becomes blocked this week, with a missed deadline.
   await step(old(6), "admin", async (c) => { P.catering = await newProject(c, "admin", { name: "[DEMO] Redesign catering menu layout", priority: "high", next_step: "Choose a template" }); });
-  await step(old(6, 1), "admin", async (c) => { await assign(c, P.catering, "m2"); await storesFor(c, P.catering, "Catering"); });
+  await step(old(6, 1), "admin", (c) => assign(c, P.catering, "m2"));
   await step(old(5), "m2", (c) => set(c, P.catering, "status = 'in_progress'"));
   await step(old(4), "admin", (c) => set(c, P.catering, "deadline = $2", dateIn(-2)));
   await step(week(0.4), "m2", (c) => set(c, P.catering, "status = 'blocked', next_step = $2", "Waiting on sample proofs"));
@@ -145,7 +142,7 @@ try {
 
   // 5. Created this week, assigned to two members at once.
   await step(week(0.15), "admin", async (c) => { P.patio = await newProject(c, "admin", { name: "[DEMO] Plan spring patio setup", description: "Synthetic example project.", priority: "high", deadline: dateIn(25), next_step: "Walk the space" }); });
-  await step(week(0.16), "admin", async (c) => { await assign(c, P.patio, "m2", "m3"); await storesFor(c, P.patio, "South Baltimore"); });
+  await step(week(0.16), "admin", (c) => assign(c, P.patio, "m2", "m3"));
 
   // 6. Fellowship-style example, assigned to one member.
   await step(old(10), "admin", async (c) => { P.fellow = await newProject(c, "admin", { name: "[DEMO] Fellowship: roll out the project tracker", status: "in_progress", deadline: dateIn(20), next_step: "Run a staff walkthrough" }); });

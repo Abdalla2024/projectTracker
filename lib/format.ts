@@ -17,8 +17,6 @@ export function describeEvent(e: { event_type: string; field: string | null; old
     case "commented": return "added a comment";
     case "assignee_added": return `assigned ${e.new_value ?? "someone"}`;
     case "assignee_removed": return `unassigned ${e.old_value ?? "someone"}`;
-    case "store_added": return `added store ${e.new_value ?? ""}`.trim();
-    case "store_removed": return `removed store ${e.old_value ?? ""}`.trim();
     case "updated": {
       const f = (e.field ?? "field").replace("_", " ");
       if (e.field === "description") return "edited the description";

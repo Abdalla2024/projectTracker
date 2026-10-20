@@ -18,7 +18,8 @@ export function databaseName(url) {
   return decodeURIComponent(new URL(url).pathname.replace(/^\//, ""));
 }
 
-export async function setupDatabase({ adminUrl, appPassword, log = () => {} }) {
+// `upTo` (a migration file name) stops after that migration; used by tests to exercise upgrades.
+export async function setupDatabase({ adminUrl, appPassword, upTo, log = () => {} }) {
   if (!adminUrl) throw new Error("DATABASE_ADMIN_URL is not set");
   if (!appPassword) throw new Error("APP_DB_PASSWORD is not set");
   const dbName = databaseName(adminUrl);
@@ -52,7 +53,7 @@ export async function setupDatabase({ adminUrl, appPassword, log = () => {} }) {
       "create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())",
     );
     const done = new Set((await client.query("select name from schema_migrations")).rows.map((r) => r.name));
-    const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+    const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql") && (!upTo || f <= upTo)).sort();
     for (const file of files) {
       if (done.has(file)) continue;
       const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), "utf8");

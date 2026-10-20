@@ -9,7 +9,7 @@ const request = (email: string, hash = "hash-ok") =>
 // Make earlier codes old enough to get past the 30-second throttle.
 const age = () => owner.query("update login_codes set created_at = created_at - interval '2 minutes'");
 
-beforeAll(resetDatabase);
+beforeAll(() => resetDatabase());
 afterAll(closePools);
 
 describe("login codes and sessions", () => {

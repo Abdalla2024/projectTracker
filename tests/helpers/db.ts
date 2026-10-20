@@ -22,7 +22,7 @@ function appUrl() {
 export let owner: pg.Pool;
 export let app: pg.Pool;
 
-export async function resetDatabase() {
+export async function resetDatabase(opts: { upTo?: string } = {}) {
   await closePools();
   const maintUrl = new URL(ADMIN_URL);
   maintUrl.pathname = "/postgres";
@@ -33,7 +33,7 @@ export async function resetDatabase() {
   } finally {
     await maint.end();
   }
-  await setupDatabase({ adminUrl: ADMIN_URL, appPassword: APP_PASSWORD });
+  await setupDatabase({ adminUrl: ADMIN_URL, appPassword: APP_PASSWORD, upTo: opts.upTo });
   owner = new pg.Pool({ connectionString: ADMIN_URL, max: 4 });
   app = new pg.Pool({ connectionString: appUrl(), max: 4 });
 }
@@ -106,3 +106,8 @@ export async function createProject(userId: string, name: string, extra: Record<
 }
 
 export const names = (rows: { name: string }[]) => rows.map((r) => r.name).sort();
+
+/** Apply any migrations not yet applied (used to test upgrading an existing database). */
+export async function migrateToLatest() {
+  await setupDatabase({ adminUrl: ADMIN_URL, appPassword: APP_PASSWORD });
+}

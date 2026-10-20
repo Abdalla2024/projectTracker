@@ -16,7 +16,7 @@
 | Create a project | ❌ | ✅ (creator = self) | ✅ |
 | Edit all fields | ❌ | Own created projects | Any |
 | Update status + next step | ❌ | Projects assigned to them | Any |
-| Assign / reassign (one or many), set stores | ❌ | ❌ | ✅ |
+| Assign / reassign (one or many) | ❌ | ❌ | ✅ |
 | Archive / restore | ❌ | Own created projects | Any |
 | Comment | ❌ | On projects they can see | On any |
 | Delete anything | ❌ | ❌ | ❌ (archive/cancel instead) |
@@ -27,7 +27,7 @@ Edit and assignment rules are **recommended defaults** to validate with Ekiben.
 
 ## Where each rule is enforced
 
-1. **Database (authoritative)** — [db/migrations/002_security.sql](../db/migrations/002_security.sql): row-level security policies decide which rows each user can read or write; triggers decide which *columns* an assignee may change, require admin for assignment/stores, stamp creator/assigner, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE).
+1. **Database (authoritative)** — [db/migrations/002_security.sql](../db/migrations/002_security.sql) (plus 003, which removes the retired store feature): row-level security policies decide which rows each user can read or write; triggers decide which *columns* an assignee may change, require admin for assignment, stamp creator/assigner, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE).
 2. **Server code** — server actions re-check the signed-in user and limit what each form may send.
 3. **Interface** — hides controls the user can't use. This is convenience only.
 

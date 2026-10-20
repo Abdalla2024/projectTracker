@@ -14,7 +14,7 @@ const ev = (project_id: string, at: Date, event_type: string, extra: Partial<Eve
 });
 const proj = (id: string, name: string, extra: Partial<ProjectRow> = {}): ProjectRow => ({
   id, name, status: "not_started", priority: "normal", deadline: null, next_step: "", archived_at: null,
-  created_at: before(48), assignees: [], stores: [], ...extra,
+  created_at: before(48), assignees: [], ...extra,
 });
 const upd = (pid: string, at: Date, field: string, o: string | null, n: string | null) =>
   ev(pid, at, "updated", { field, old_value: o, new_value: n });
@@ -39,21 +39,18 @@ describe("stateAt", () => {
     expect(stateAt(p, events, after(7))!.status).toBe("blocked");
   });
 
-  it("rebuilds assignee, store and archive state", () => {
+  it("rebuilds assignee and archive state", () => {
     const p = proj("a", "A", {
       assignees: [{ id: "u1", name: "One" }, { id: "u3", name: "Three" }],
-      stores: [{ id: "s1", name: "Hampden" }],
       archived_at: after(20),
     });
     const events = [
       ev("a", after(1), "assignee_added", { subject_id: "u1", new_value: "One" }),
       ev("a", after(2), "assignee_removed", { subject_id: "u2", old_value: "Two" }),
-      ev("a", after(3), "store_added", { subject_id: "s1", new_value: "Hampden" }),
       ev("a", after(20), "archived"),
     ];
     const s = stateAt(p, events, START)!;
     expect([...s.assignees.values()].sort()).toEqual(["Three", "Two"]);
-    expect(s.stores.size).toBe(0);
     expect(s.archived).toBe(false);
   });
 });

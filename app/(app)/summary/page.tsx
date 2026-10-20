@@ -17,8 +17,6 @@ function lines(p: ProjectSummary): string[] {
   if (p.nextStepChange) out.push(`Next step: "${p.nextStepChange.from || "none"}" → "${p.nextStepChange.to || "none"}"`);
   if (p.assigneesAdded.length) out.push(`Assigned: ${p.assigneesAdded.join(", ")}`);
   if (p.assigneesRemoved.length) out.push(`Unassigned: ${p.assigneesRemoved.join(", ")}`);
-  if (p.storesAdded.length) out.push(`Stores added: ${p.storesAdded.join(", ")}`);
-  if (p.storesRemoved.length) out.push(`Stores removed: ${p.storesRemoved.join(", ")}`);
   if (p.archivedChange) out.push(p.archivedChange === "archived" ? "Archived" : "Restored from archive");
   if (p.comments) out.push(`${p.comments} new comment${p.comments === 1 ? "" : "s"}`);
   return out;

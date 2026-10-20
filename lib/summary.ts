@@ -19,7 +19,6 @@ export interface ProjectRow {
   archived_at: Date | null;
   created_at: Date;
   assignees: Person[];
-  stores: Person[];
 }
 
 export interface EventRow {
@@ -41,7 +40,6 @@ export interface ProjectState {
   next_step: string;
   archived: boolean;
   assignees: Map<string, string>;
-  stores: Map<string, string>;
 }
 
 const byTimeDesc = (a: EventRow, b: EventRow) =>
@@ -59,7 +57,6 @@ export function stateAt(project: ProjectRow, events: EventRow[], at: Date): Proj
     next_step: project.next_step,
     archived: project.archived_at !== null,
     assignees: new Map(project.assignees.map((p) => [p.id, p.name])),
-    stores: new Map(project.stores.map((s) => [s.id, s.name])),
   };
 
   const after = events.filter((e) => e.occurred_at.getTime() > at.getTime()).sort(byTimeDesc);
@@ -77,12 +74,6 @@ export function stateAt(project: ProjectRow, events: EventRow[], at: Date): Proj
         break;
       case "assignee_removed":
         if (e.subject_id) state.assignees.set(e.subject_id, e.old_value ?? "Unknown");
-        break;
-      case "store_added":
-        if (e.subject_id) state.stores.delete(e.subject_id);
-        break;
-      case "store_removed":
-        if (e.subject_id) state.stores.set(e.subject_id, e.old_value ?? "Unknown");
         break;
       case "archived":
         state.archived = false;
@@ -109,8 +100,6 @@ export interface ProjectSummary {
   nextStepChange: Change<string> | null;
   assigneesAdded: string[];
   assigneesRemoved: string[];
-  storesAdded: string[];
-  storesRemoved: string[];
   archivedChange: "archived" | "unarchived" | null;
   comments: number;
   newlyBlocked: boolean;
@@ -178,7 +167,6 @@ export function buildWeeklySummary(input: {
     const deadlineChange = !isNew && s0!.deadline !== s1.deadline ? { from: s0!.deadline, to: s1.deadline } : null;
     const emptyAssignees = new Map<string, string>();
     const a0 = s0?.assignees ?? emptyAssignees;
-    const t0 = s0?.stores ?? emptyAssignees;
 
     const open = !CLOSED_STATUSES.includes(s1.status) && !s1.archived;
     let deadlineFlag: DeadlineFlag | null = null;
@@ -198,8 +186,6 @@ export function buildWeeklySummary(input: {
       nextStepChange: changeOf("next_step"),
       assigneesAdded: diff(a0, s1.assignees),
       assigneesRemoved: diff(s1.assignees, a0),
-      storesAdded: diff(t0, s1.stores),
-      storesRemoved: diff(s1.stores, t0),
       archivedChange: s0 && s0.archived !== s1.archived ? (s1.archived ? "archived" : "unarchived") : null,
       comments: inWindow.filter((e) => e.event_type === "commented").length,
       newlyBlocked: s1.status === "blocked" && s0?.status !== "blocked",
@@ -214,7 +200,7 @@ export function buildWeeklySummary(input: {
     summary.changed =
       isNew ||
       !!(summary.statusChange || summary.priorityChange || summary.deadlineChange || summary.nextStepChange) ||
-      summary.assigneesAdded.length + summary.assigneesRemoved.length + summary.storesAdded.length + summary.storesRemoved.length > 0 ||
+      summary.assigneesAdded.length + summary.assigneesRemoved.length > 0 ||
       !!summary.archivedChange ||
       summary.comments > 0;
     items.push(summary);

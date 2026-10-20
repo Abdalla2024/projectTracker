@@ -5,7 +5,7 @@ import { Alerts } from "@/app/components/Alerts";
 import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 import { describeEvent } from "@/lib/format";
-import { getProjectDetail, listPeople, listStores } from "@/lib/projects";
+import { getProjectDetail, listPeople } from "@/lib/projects";
 import { formatDate, formatDateTime, timeZone } from "@/lib/time";
 
 export default async function ProjectPage({
@@ -26,9 +26,8 @@ export default async function ProjectPage({
   const isCreator = project.created_by === user.id;
   const fullEdit = isAdmin || isCreator;
   const zone = timeZone();
-  const [people, stores] = isAdmin ? await Promise.all([listPeople(user.id), listStores(user.id)]) : [[], []];
+  const people = isAdmin ? await listPeople(user.id) : [];
   const assigned = new Set(project.assignees.map((a) => a.id));
-  const inStores = new Set(project.stores.map((s) => s.id));
 
   return (
     <>
@@ -58,8 +57,6 @@ export default async function ProjectPage({
           <dt className="muted">Created by</dt><dd style={{ margin: 0 }}>{project.creator_name}, {formatDateTime(project.created_at, zone)}</dd>
           <dt className="muted">Assigned to</dt>
           <dd style={{ margin: 0 }}>{project.assignees.length ? project.assignees.map((a) => a.name).join(", ") : "Unassigned"}</dd>
-          <dt className="muted">Stores</dt>
-          <dd style={{ margin: 0 }}>{project.stores.length ? project.stores.map((s) => s.name).join(", ") : "None selected"}</dd>
           <dt className="muted">Deadline</dt><dd style={{ margin: 0 }}>{project.deadline ? formatDate(project.deadline) : "None"}</dd>
           <dt className="muted">Next step</dt><dd style={{ margin: 0 }}>{project.next_step || "—"}</dd>
           <dt className="muted">Last updated</dt><dd style={{ margin: 0 }}>{formatDateTime(project.updated_at, zone)}</dd>
@@ -122,7 +119,7 @@ export default async function ProjectPage({
 
       {isAdmin ? (
         <form action={assignAction} className="card">
-          <h2>Assignees and stores</h2>
+          <h2>Assignees</h2>
           <input type="hidden" name="id" value={project.id} />
           <label>Assigned to (one or more)</label>
           <div className="checks">
@@ -130,13 +127,7 @@ export default async function ProjectPage({
               <label key={p.id}><input type="checkbox" name="assignees" value={p.id} defaultChecked={assigned.has(p.id)} /> {p.name}</label>
             ))}
           </div>
-          <label>Stores</label>
-          <div className="checks">
-            {stores.map((s) => (
-              <label key={s.id}><input type="checkbox" name="stores" value={s.id} defaultChecked={inStores.has(s.id)} /> {s.name}</label>
-            ))}
-          </div>
-          <p><button type="submit">Save assignment</button></p>
+          <p><button type="submit">Save assignees</button></p>
           <p className="hint">Only people who have signed in at least once appear here.</p>
         </form>
       ) : null}

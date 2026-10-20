@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe("runtime database role", () => {
-  beforeAll(resetDatabase);
+  beforeAll(() => resetDatabase());
   afterAll(closePools);
 
   it("refuses to run on a connection that can bypass row-level security (owner/superuser)", async () => {

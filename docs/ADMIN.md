@@ -23,8 +23,5 @@ A disabled account loses access immediately (existing sessions stop working), ca
 ## Audit
 `select * from role_changes order by id;` shows every role change with time and the database user that made it.
 
-## Stores
-The store list is reference data in the `stores` table (seeded in migration 001, provisional). Change with SQL as the owner, e.g. `update stores set active = false where name = '...'`. Existing projects keep their stores.
-
 ## Allowed domains
 Set `ALLOWED_EMAIL_DOMAINS` (comma-separated; exact match, no subdomains). The database re-checks the same list when creating an account.

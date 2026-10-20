@@ -5,8 +5,7 @@ import { z } from "zod";
 import { requestLoginCode, requireUser, signOut, verifyLoginCode } from "@/lib/auth";
 import { PRIORITIES, STATUSES } from "@/lib/constants";
 import {
-  NotAllowedError, addComment, createProject, getProjectDetail, isUuid, setArchived, setAssignmentsAndStores,
-  updateProject,
+  NotAllowedError, addComment, createProject, getProjectDetail, isUuid, setArchived, setAssignees, updateProject,
 } from "@/lib/projects";
 
 const enc = encodeURIComponent;
@@ -78,7 +77,7 @@ export async function createProjectAction(formData: FormData) {
   let id = "";
   await attempt("/projects/new", async () => {
     id = await createProject(user, {
-      ...parsed.data, assigneeIds: ids(formData, "assignees"), storeIds: ids(formData, "stores"),
+      ...parsed.data, assigneeIds: ids(formData, "assignees"),
     });
   });
   redirect(`/projects/${id}?saved=1`);
@@ -112,7 +111,7 @@ export async function assignAction(formData: FormData) {
   const user = await requireUser();
   const id = str(formData, "id");
   if (!isUuid(id)) redirect("/");
-  await attempt(`/projects/${id}`, () => setAssignmentsAndStores(user.id, id, ids(formData, "assignees"), ids(formData, "stores")));
+  await attempt(`/projects/${id}`, () => setAssignees(user.id, id, ids(formData, "assignees")));
   redirect(`/projects/${id}?saved=1`);
 }
 

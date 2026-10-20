@@ -2,13 +2,13 @@ import { createProjectAction } from "@/app/actions";
 import { Alerts } from "@/app/components/Alerts";
 import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
-import { listPeople, listStores } from "@/lib/projects";
+import { listPeople } from "@/lib/projects";
 
 export default async function NewProjectPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await requireUser();
   const { error } = await searchParams;
   const isAdmin = user.role === "admin";
-  const [people, stores] = isAdmin ? await Promise.all([listPeople(user.id), listStores(user.id)]) : [[], []];
+  const people = isAdmin ? await listPeople(user.id) : [];
 
   return (
     <>
@@ -47,12 +47,6 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
             <div className="checks">
               {people.map((p) => (
                 <label key={p.id}><input type="checkbox" name="assignees" value={p.id} /> {p.name}</label>
-              ))}
-            </div>
-            <label>Stores</label>
-            <div className="checks">
-              {stores.map((s) => (
-                <label key={s.id}><input type="checkbox" name="stores" value={s.id} /> {s.name}</label>
               ))}
             </div>
           </>

@@ -82,8 +82,8 @@ describe("project visibility", () => {
     expect(await visible(disabledUser)).toEqual([]);
   });
 
-  it("comments, events, assignees and stores of an invisible project are invisible", async () => {
-    for (const table of ["comments", "project_events", "project_assignees", "project_stores"]) {
+  it("comments, events and assignees of an invisible project are invisible", async () => {
+    for (const table of ["comments", "project_events", "project_assignees"]) {
       const r = await asUser(m2, (c) => c.query(`select * from ${table} where project_id = $1`, [p1]));
       expect(r.rowCount, table).toBe(0);
     }
@@ -102,6 +102,11 @@ describe("project visibility", () => {
     expect((await visible(m2)).includes("Temp")).toBe(true);
     await asUser(admin, (c) => c.query("delete from project_assignees where project_id = $1 and user_id = $2", [tmp, m2]));
     expect((await visible(m2)).includes("Temp")).toBe(false);
+    const ev = await owner.query("select event_type, old_value from project_events where project_id = $1 and event_type like 'assignee_%' order by id", [tmp]);
+    expect(ev.rows).toEqual([
+      { event_type: "assignee_added", old_value: null },
+      { event_type: "assignee_removed", old_value: "Member Two" },
+    ]);
   });
 });
 
@@ -127,12 +132,9 @@ describe("who may change what", () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it("only an admin can assign, reassign or set stores", async () => {
+  it("only an admin can assign or reassign", async () => {
     await expect(
       asUser(m1, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [p1, m1, m1])),
-    ).rejects.toThrow(/row-level security|only an admin/);
-    await expect(
-      asUser(m1, (c) => c.query("insert into project_stores (project_id, store_id) select $1, id from stores limit 1", [p1])),
     ).rejects.toThrow(/row-level security|only an admin/);
     // Assignee (m3) of p3 cannot add or remove assignees either.
     await expect(
@@ -206,16 +208,14 @@ describe("history", () => {
     expect(ev.filter((e) => e.event_type === "assignee_added").map((e) => e.new_value).sort()).toEqual(["Member One", "Member Three"]);
   });
 
-  it("records comments, store changes, archive and removal events", async () => {
+  it("records comment and archive events", async () => {
     await asUser(admin, async (c) => {
-      await c.query("insert into project_stores (project_id, store_id) select $1, id from stores where name = 'Hampden'", [p3]);
-      await c.query("delete from project_stores where project_id = $1", [p3]);
       await c.query("insert into comments (project_id, author_id, body) values ($1,$2,'feedback')", [p3, admin]);
       await c.query("update projects set archived_at = now() where id = $1", [p3]);
       await c.query("update projects set archived_at = null where id = $1", [p3]);
     });
-    const ev = await owner.query("select event_type from project_events where project_id = $1 order by id desc limit 5", [p3]);
-    expect(ev.rows.map((e) => e.event_type).reverse()).toEqual(["store_added", "store_removed", "commented", "archived", "unarchived"]);
+    const ev = await owner.query("select event_type from project_events where project_id = $1 order by id desc limit 3", [p3]);
+    expect(ev.rows.map((e) => e.event_type).reverse()).toEqual(["commented", "archived", "unarchived"]);
   });
 
   it("is append-only for the app role and for the owner", async () => {
@@ -240,7 +240,7 @@ describe("history", () => {
     expect((await owner.query("select count(*)::int n from project_events")).rows[0].n).toBe(before);
   });
 
-  it("bumps updated_at when assignees, stores or comments change", async () => {
+  it("bumps updated_at when assignees or comments change", async () => {
     const t0 = (await owner.query("select updated_at from projects where id = $1", [p1])).rows[0].updated_at;
     await new Promise((r) => setTimeout(r, 20));
     await asUser(m1, (c) => c.query("insert into comments (project_id, author_id, body) values ($1,$2,'again')", [p1, m1]));

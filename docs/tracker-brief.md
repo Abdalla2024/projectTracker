@@ -6,8 +6,8 @@ Ekiben is a Baltimore restaurant. This tracker is part of a 5-week AI Builder fe
 ## Requirements (current)
 - **Accounts:** sign in with a verified email at an allowed Ekiben domain (configurable; `ekibenbaltimore.com` is provisional). Roles are member and admin. Everyone defaults to member; admins come only from a private allowlist managed out of band.
 - **Visibility:** a member sees projects they created and projects an admin assigned to them. An admin sees all. Enforced in the database.
-- **Projects:** name, description, creator, multiple assignees, stores, status (not started, in progress, blocked, done, cancelled), priority, optional deadline, next step, timestamps, comments, and dated history. Archive or cancel, never delete.
-- **Editing (defaults to confirm):** creators edit their own projects; assignees update status and next step and comment; only admins assign, reassign, and set stores; anyone who can see a project can comment.
+- **Projects:** name, description, creator, multiple assignees, status (not started, in progress, blocked, done, cancelled), priority, optional deadline, next step, timestamps, comments, and dated history. Archive or cancel, never delete.
+- **Editing (defaults to confirm):** creators edit their own projects; assignees update status and next step and comment; only admins assign and reassign; anyone who can see a project can comment.
 - **History:** append-only, written in the same transaction as each change.
 - **Weekly summary:** in-app, compares each project at Monday 00:00 `America/New_York` with now; members see only their projects; deterministic, no AI.
 - **Privacy:** synthetic demo data only; visible reminder not to enter customer or financial details; no secrets in git.
@@ -21,17 +21,19 @@ Permissions in detail: [ACCESS.md](ACCESS.md). Admin procedures: [ADMIN.md](ADMI
 - **Passwordless email-code sign-in**, custom, because no identity vendor is chosen. Trade-off: custom auth needs outside review before real use.
 - **Summary rebuilt from the event log**, so start-of-week state needs no snapshot job.
 - **No AI narrative** in this version.
+- **No store selection.** Removed at the project owner's direction; migration 003 drops the store tables and links but keeps existing history rows (history is append-only).
 
 ## Open questions (default if unanswered)
 1. Allowed domain(s); do staff use Google Workspace or Microsoft 365 (SSO)? (single domain, email codes)
 2. Which people are admins? (none until sent privately)
 3. Are the edit and assignment defaults right? (as built)
 4. Approved hosting, database, and email sender, and who owns them afterward? (temporary accounts, synthetic data only)
-5. Real store list and workflow statuses? (provisional list; change by SQL)
+5. Do the workflow statuses fit how Ekiben works? (as built)
 6. Where should the weekly summary be delivered, and who reviews it? (in-app, admin reviews)
 
 ## Verified and not verified
-- **Automated, run:** 59 checks against a throwaway Postgres (access rules, sign-in, summary logic, time zones, config guards); typecheck; production build; a search of the built client files for database and secret strings (none found).
-- **Browser walkthrough, run (seeded local data, `next dev`):** real Google Chrome 155 (headless, scripted with Playwright), at 1280×800 and at 390×844 with mobile emulation, on the five flows: admin sees all projects; a member can't see the private project; a member creates a project and an admin assigns it to two members, and all three can see it; comments and history; weekly summary as admin and as a member, each limited to accessible projects. 41 scripted checks passed at each size, with no page-level horizontal scroll and no browser console errors; the only error response was the deliberate hidden-project 404. I looked at the key screenshot of each flow at each size, not every one.
-- **Found and fixed from the browser run:** a missing favicon (404 and a "1 Issue" dev badge on every page), a project list that hid its Assigned-to and Stores columns off-screen on phones, an awkward phone header, a sign-in card with no side margin, a bare framework 404 for hidden projects, and a local-dev note styled as an error.
+- **Automated, run:** 65 checks in 7 files against a throwaway Postgres (access rules, sign-in, summary logic, time zones, config guards, and the store-removal upgrade); typecheck; production build; a search of the built client files for database/secret strings and for store code (none found).
+- **Store removal, run:** the upgrade test builds a database at migration 002 with store data and store history, applies migration 003, and checks that the store tables and functions are gone, the old history rows are kept (append-only), new store events are refused, and the rest of the app still works. On the real local database, `npm run db:setup` dropped 5 store links and kept 5 history rows; reseeding the demo data then cleared those demo-only rows. A repo-wide search finds no other store references outside migrations 001-003 and their test.
+- **Browser walkthrough, run (seeded local data, `next dev`):** real Google Chrome 155 (headless, scripted with Playwright) at 1280×800 and at 390×844 with mobile emulation, on the five flows: admin sees all projects; a member can't see the private project; a member creates a project and an admin assigns it to two members, and all three can see it; comments and history; weekly summary as admin and as a member, each limited to accessible projects. 47 scripted checks passed at each size, including that no store UI appears on the list, forms, project page, history, or summary. No page-level horizontal scroll, no browser console errors, and the only error response was the deliberate hidden-project 404. I looked at the key screenshot of each flow at each size, not every one.
+- **Found by the browser runs and fixed:** a missing favicon (404 and a "1 Issue" dev badge), a phone project list that hid its Assigned-to column off-screen, an awkward phone header, a sign-in card with no side margin, a bare framework 404 for hidden projects, a local-dev note styled as an error, and (on the store-removal rerun) overlapping queries on one database connection that `pg` deprecates and will remove in version 9.
 - **Not verified:** a physical phone, Safari or Firefox (only emulated mobile in Chrome); dark mode; accessibility (keyboard, screen reader, contrast); the production build in a browser (the walkthrough used the dev server); the SMTP email path (only console mode ran); a managed Postgres; any hosted deployment; independent security review; load. The walkthrough script is a throwaway outside the repository, so it is not a repeatable check here.
