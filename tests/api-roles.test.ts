@@ -103,6 +103,16 @@ describe("provider API roles (anon, authenticated, service_role)", () => {
     await expect(migrateToLatest()).resolves.toBeUndefined();
   });
 
+  it("ignores event-trigger functions, which cannot be called directly (the provider ships one in public)", async () => {
+    await owner.query("create function zz_evt() returns event_trigger language plpgsql as 'begin end'; grant execute on function zz_evt() to anon");
+    try {
+      const c = await owner.connect();
+      try { expect(await findApiRoleExposure(c)).toEqual([]); } finally { c.release(); }
+    } finally {
+      await owner.query("drop function zz_evt()");
+    }
+  });
+
   it("does not affect the app's own restricted role", async () => {
     const r = await owner.query("select has_function_privilege('tracker_app', 'auth_resolve_session(text)', 'EXECUTE') f, has_table_privilege('tracker_app', 'projects', 'SELECT') t");
     expect(r.rows[0]).toEqual({ f: true, t: true });

@@ -20,6 +20,7 @@ export async function findApiRoleExposure(client) {
     `select c.oid, c.relname from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'S'`);
   const functions = await client.query(
     `select p.oid, p.proname as relname from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f','p')
+       and p.prorettype <> 'event_trigger'::regtype -- cannot be called directly (e.g. the provider's own rls_auto_enable)
        and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')`);
   const existing = (await client.query("select rolname from pg_roles where rolname = any($1)", [API_ROLES])).rows.map((x) => x.rolname);
   for (const role of existing) {
