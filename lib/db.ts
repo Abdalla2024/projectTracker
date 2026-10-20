@@ -6,11 +6,17 @@ import pg from "pg";
 
 const globalForPool = globalThis as unknown as { __trackerPool?: pg.Pool; __trackerPoolChecked?: Promise<void> };
 
+/** Max connections per server instance. Serverless hosts run many instances, so keep this small there (see docs). */
+function poolMax(): number {
+  const n = Number.parseInt(process.env.DATABASE_POOL_MAX ?? "", 10);
+  return Number.isFinite(n) ? Math.min(Math.max(n, 1), 20) : 10;
+}
+
 function pool(): pg.Pool {
   if (!globalForPool.__trackerPool) {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error("DATABASE_URL is not set (see .env.example).");
-    globalForPool.__trackerPool = new pg.Pool({ connectionString: url, max: 10 });
+    globalForPool.__trackerPool = new pg.Pool({ connectionString: url, max: poolMax() });
   }
   return globalForPool.__trackerPool;
 }
