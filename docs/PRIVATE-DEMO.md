@@ -3,8 +3,8 @@
 The app is deployed on Vercel at **https://ekiben-project-tracker.vercel.app** (Hobby plan, project `ekiben-project-tracker`). The Git connection is set up. Sign-in does not work yet: it still needs the Supabase connection details and an email sender (section 1). Use synthetic data only. Do not enter real Ekiben, customer, or financial data without approval.
 
 ## 0. Status (Oct 20, 2026)
-- **Done:** project created; production build succeeds on Vercel; GitHub repo `Abdalla2024/projectTracker` connected with `main` as the production branch (`vercel git connect` reported "Connected"; the project's Git link shows that repo and branch); production variables set for `AUTH_SECRET`, `ALLOWED_EMAIL_DOMAINS=ekibenbaltimore.com` (provisional until Ekiben confirms), `APP_TIME_ZONE`, `DATABASE_POOL_MAX`, `EMAIL_TRANSPORT=smtp`.
-- **Not done:** `DATABASE_URL`, `DATABASE_CA_CERT`, `EMAIL_FROM`, `SMTP_*`; database setup; admin accounts (deliberately postponed). Whether a push actually triggers a deployment is confirmed in the brief if and when it has been tested.
+- **Done:** project created; **push-to-deploy confirmed** (pushing commit `0676051` to `main` created a production deployment with source `git`, which reached READY); production build succeeds on Vercel; GitHub repo `Abdalla2024/projectTracker` connected with `main` as the production branch (`vercel git connect` reported "Connected"; the project's Git link shows that repo and branch); production variables set for `AUTH_SECRET`, `ALLOWED_EMAIL_DOMAINS=ekibenbaltimore.com` (provisional until Ekiben confirms), `APP_TIME_ZONE`, `DATABASE_POOL_MAX`, `EMAIL_TRANSPORT=smtp`.
+- **Not done:** `DATABASE_URL`, `DATABASE_CA_CERT`, `EMAIL_FROM`, `SMTP_*`; database setup; admin accounts (deliberately postponed). 
 - **Protection, as observed:** the production domain answers anonymously (HTTP 200), so testers need no Vercel login. Per-deployment URLs redirect to a Vercel login.
 - **Plan note:** Hobby is, as I understand Vercel's terms, for personal non-commercial use; a business demo may need a paid plan. Check Vercel's current terms.
 
@@ -69,7 +69,7 @@ Details and counts: [tracker-brief.md](tracker-brief.md).
 - A production build with no environment variables; production-mode runs with SMTP delivery, `Secure; HttpOnly; SameSite=Lax` cookies, and the Chrome walkthrough at desktop and phone size (47 checks each).
 
 ## 6. Not verified (needs the real accounts)
-Supabase itself (role creation as its `postgres` user, its pooler in transaction mode, its certificate chain with the downloaded CA, the Data API setting, default privileges re-applied by the platform); a real SMTP provider and deliverability; push-to-deploy by an actual push; Vercel plan terms; backups and restore.
+Supabase itself (role creation as its `postgres` user, its pooler in transaction mode, its certificate chain with the downloaded CA, the Data API setting, default privileges re-applied by the platform); a real SMTP provider and deliverability; Vercel plan terms; backups and restore.
 
 ## 7. Before any production use (not designed here)
 A named owner after the fellowship, who pays for and owns each account, backups and a tested restore, secret rotation, data retention, an incident contact, and whether to use Google/Microsoft sign-in instead of email codes. Deployment protection or a password adds a layer but does not replace the app's own sign-in.
