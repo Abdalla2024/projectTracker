@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createProjectAction } from "@/app/actions";
 import { ProgressField } from "@/app/components/ProgressField";
 
@@ -19,6 +19,9 @@ interface Props {
 
 export function NewProjectModal({ people, locations, teams, defaultLocation, defaultTeam, statuses, priorities, phaseMax, defaultOpen, error }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [tasks, setTasks] = useState<string[]>([""]);
+  const hasTasks = tasks.some((t) => t.trim());
+  const setTask = (i: number, v: string) => setTasks((ts) => ts.map((t, j) => (j === i ? v : t)));
   useEffect(() => {
     if (defaultOpen) ref.current?.showModal();
   }, [defaultOpen]);
@@ -82,9 +85,24 @@ export function NewProjectModal({ people, locations, teams, defaultLocation, def
             </div>
             <div>
               <label htmlFor="np-progress">Progress</label>
-              <ProgressField id="np-progress" />
+              {hasTasks ? <p className="auto-progress">Follows the tasks below: 0% to start, 100% when all are done.</p> : <ProgressField id="np-progress" />}
             </div>
           </div>
+          <fieldset className="np-tasks">
+            <legend>Tasks</legend>
+            <p className="hint">Break the project into steps. People tick them off one at a time and the progress ring moves on its own.</p>
+            <ol>
+              {tasks.map((t, i) => (
+                <li key={i}>
+                  <input type="text" name="task_titles" maxLength={300} value={t} placeholder={`Task ${i + 1}`} aria-label={`Task ${i + 1}`}
+                    onChange={(e) => setTask(i, e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setTasks((ts) => [...ts.slice(0, i + 1), "", ...ts.slice(i + 1)]); } }} />
+                  {tasks.length > 1 ? <button type="button" className="icon-btn" aria-label={`Remove task ${i + 1}`} onClick={() => setTasks((ts) => ts.filter((_, j) => j !== i))}>×</button> : null}
+                </li>
+              ))}
+            </ol>
+            <button type="button" className="secondary small" onClick={() => setTasks((ts) => [...ts, ""])}>+ Add task</button>
+          </fieldset>
           {people.length ? (
             <>
               <label>Assign to (one or more)</label>

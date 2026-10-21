@@ -31,7 +31,8 @@ export function Sidebar({ isAdmin, locations, teams, logo, account }: {
     { href: "/calendar", key: "calendar", label: "Calendar" },
     { href: "/summary", key: "summary", label: "Weekly summary" },
     { href: "/reports", key: "reports", label: "Nightly reports" },
-    ...(isAdmin ? [{ href: "/dashboard", key: "dashboard", label: "Dashboard" }, { href: "/settings", key: "settings", label: "Settings" }] : []),
+    { href: "/dashboard", key: "dashboard", label: "Dashboard" },
+    ...(isAdmin ? [{ href: "/settings", key: "settings", label: "Settings" }] : []),
   ];
   const isActive = (href: string) => (href === "/" ? path === "/" && !params.get("location") && !params.get("team") : path.startsWith(href));
   const unitLink = (kind: "location" | "team", u: Unit) => (

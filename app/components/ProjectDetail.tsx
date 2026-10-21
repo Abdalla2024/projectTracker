@@ -71,6 +71,8 @@ export function ProjectDetail({
 }: { project: Project; tasks: Tasks; user: SessionUser; people: People; locations: Unit[]; teams: Unit[]; zone: string; today: string; error?: string; saved?: string }) {
   // Shared workspace: everyone edits; archiving stays with the creator or an admin (enforced in the database).
   const canArchive = user.role === "admin" || project.created_by === user.id;
+  // With tasks, the database sets progress from them; the slider only applies to projects without tasks.
+  const fromTasks = tasks.tasks.some((t) => !t.parent_id);
   const assigned = new Set(project.assignees.map((a) => a.id));
   const id = project.id;
   const top = project.comments.filter((c) => !c.parent_id);
@@ -91,7 +93,7 @@ export function ProjectDetail({
               {project.assignees.length ? <><dt>Assigned to</dt><dd>{project.assignees.map((a) => a.name).join(", ")}</dd></> : null}
               <dt>Status</dt><dd>{STATUS_LABELS[project.status]}</dd>
               <dt>Phase</dt><dd>{project.phase || "—"}</dd>
-              <dt>Progress</dt><dd>{project.status === "done" ? 100 : project.progress}%</dd>
+              <dt>Progress</dt><dd>{project.status === "done" ? 100 : project.progress}%{fromTasks ? " (from tasks)" : ""}</dd>
               <dt>Deadline</dt><dd>{project.deadline ? formatDate(project.deadline) : "None"}</dd>
               <dt>Next step</dt><dd>{project.next_step || "—"}</dd>
               <dt>Last updated</dt><dd>{formatDateTime(project.updated_at, zone)}</dd>
@@ -139,7 +141,12 @@ export function ProjectDetail({
               </div>
               <div>
                 <label htmlFor={`progress-${id}`}>Progress</label>
-                <ProgressField id={`progress-${id}`} defaultValue={project.progress} />
+                {fromTasks ? (
+                  <>
+                    <input type="hidden" name="progress" value={project.progress} />
+                    <p className="auto-progress">{project.progress}%, from the tasks above. Tick tasks off to move it.</p>
+                  </>
+                ) : <ProgressField id={`progress-${id}`} defaultValue={project.progress} />}
               </div>
               <div>
                 <label htmlFor={`deadline-${id}`}>Deadline</label>

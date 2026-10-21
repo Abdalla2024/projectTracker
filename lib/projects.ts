@@ -142,6 +142,8 @@ export interface NewProject {
   location_id: string | null;
   team_id: string | null;
   assigneeIds: string[];
+  /** Tasks to create with the project, in order; progress then follows them. */
+  taskTitles?: string[];
 }
 
 export async function createProject(user: { id: string }, input: NewProject): Promise<string> {
@@ -154,6 +156,9 @@ export async function createProject(user: { id: string }, input: NewProject): Pr
     );
     const id: string = r.rows[0].id;
     await replaceAssignees(c, id, input.assigneeIds, user.id);
+    for (const [i, title] of (input.taskTitles ?? []).entries()) {
+      await c.query("insert into tasks (project_id, title, created_by, sort_order) values ($1,$2,$3,$4)", [id, title, user.id, i]);
+    }
     return id;
   });
 }

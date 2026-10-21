@@ -39,13 +39,12 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
   const win = weekWindow(new Date(), zone, weeksAgo);
 
   // Everything loaded here is already limited by the database to projects this user may see.
-  const isAdmin = user.role === "admin";
   const startDate = DateTime.fromJSDate(win.start, { zone }).toISODate()!;
   const endDate = DateTime.fromJSDate(win.end, { zone }).toISODate()!;
   const prevStart = DateTime.fromISO(startDate).minus({ days: 7 }).toISODate()!;
   const [raw, locations, teams, reports] = await Promise.all([
     loadSummaryData(user.id, win.start), listOrg(user.id, "locations"), listOrg(user.id, "teams"),
-    isAdmin ? listReports(user.id, { from: prevStart, to: endDate, location }) : Promise.resolve([]),
+    listReports(user.id, { from: prevStart, to: endDate, location }),
   ]);
   // Narrow to one location or team; history, comments and tasks follow their projects.
   const projects = raw.projects.filter((p) => (!location || p.location_id === location) && (!team || p.team_id === team));
@@ -55,7 +54,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
   const t = summary.totals;
   const narrative = buildNarrative({ ...data, start: win.start, end: win.end, zone, period: win.isCurrent ? "this week" : "that week" });
 
-  // Store snapshot for admins: this week against the week before, from the nightly reports.
+  // Store snapshot: this week against the week before, from the nightly reports.
   const activeLocations = locations.filter((l) => !l.archived_at && (!location || l.id === location));
   const stores = activeLocations.map((l) => {
     const now = reports.filter((r) => r.location_id === l.id && r.report_date >= startDate && r.report_date <= endDate);
@@ -88,7 +87,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
         </select>
       </AutoSubmit>
 
-      {isAdmin && stores.length ? (
+      {stores.length ? (
         <section className="stores">
           {stores.map((st) => (
             <div key={st.id} className="store">

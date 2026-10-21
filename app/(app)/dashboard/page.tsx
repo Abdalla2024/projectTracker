@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { DateTime } from "luxon";
 import { AutoSubmit } from "@/app/components/AutoSubmit";
 import { BarChart, LineChart, ScatterChart } from "@/app/components/Charts";
@@ -21,8 +20,6 @@ const NOTE_KINDS = [
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ days?: string; location?: string }> }) {
   const user = await requireUser();
-  // Sales data: admins only (the database also limits members to their own reports).
-  if (user.role !== "admin") notFound();
   const sp = await searchParams;
   const zone = timeZone();
   const today = localDateString(new Date(), zone);

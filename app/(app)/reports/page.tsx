@@ -14,7 +14,6 @@ const money = (n: number) => n.toLocaleString("en-US", { style: "currency", curr
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ location?: string; days?: string; error?: string }> }) {
   const user = await requireUser();
   const sp = await searchParams;
-  const isAdmin = user.role === "admin";
   const zone = timeZone();
   const today = localDateString(new Date(), zone);
   const days = [7, 30, 90, 365].includes(Number(sp.days)) ? Number(sp.days) : 30;
@@ -32,7 +31,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Link className="btn" href={`/reports/new${location ? `?location=${location}` : ""}`}>+ New report</Link>
       </div>
       <Alerts error={sp.error} />
-      {isAdmin && active.length ? (
+      {active.length ? (
         <div className="tonight">
           <span className="muted">Tonight:</span>
           {active.map((l) => (
@@ -48,7 +47,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <select name="days" defaultValue={String(days)} aria-label="Period">
           <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option>
         </select>
-        {!isAdmin ? <span className="hint">You see the reports you submitted. Admins see all reports.</span> : null}
       </AutoSubmit>
       {reports.length === 0 ? (
         <div className="empty-card">No reports in this period.</div>

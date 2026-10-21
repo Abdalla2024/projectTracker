@@ -1,6 +1,6 @@
 # Ekiben Project Tracker (demo)
 
-An internal web app for Ekiben (a Baltimore restaurant group): a shared, Asana-style project tracker plus nightly store reports. Everyone signed in sees every project, organised by location (store) and team (position), with list and board views, tasks and subtasks, My tasks, a calendar, comments, and a progress ring per project. Managers file a nightly report per store; admins get a dashboard of sales, weather, temperature and ticket times. A written weekly summary compares every project at Monday 12:00 AM (America/New_York) with now.
+An internal web app for Ekiben (a Baltimore restaurant group): a shared, Asana-style project tracker plus nightly store reports. Everyone signed in sees every project, organised by location (store) and team (position), with list and board views, tasks and subtasks, My tasks, a calendar, comments, and a progress ring per project. Managers file a nightly report per store, and everyone gets a dashboard of sales, weather, temperature and ticket times. Projects split into tasks; ticking them off moves the progress ring. A written weekly summary compares every project at Monday 12:00 AM (America/New_York) with now.
 
 Project context, requirements, decisions, open questions, and what is unverified: [docs/tracker-brief.md](docs/tracker-brief.md). Contributor guidance: [CLAUDE.md](CLAUDE.md).
 
@@ -88,7 +88,7 @@ docs/                 ACCESS.md, ADMIN.md, PRIVATE-DEMO.md
 
 ## What is tested
 
-`npm test` runs 174 checks in 16 files against a real throwaway Postgres, as the same restricted role the app uses:
+`npm test` runs 176 checks in 16 files against a real throwaway Postgres, as the same restricted role the app uses:
 - [tests/access.test.ts](tests/access.test.ts) — who can see/change what (members, assignees, admins, disabled users, no-user), role cannot be self-assigned, history is written with every change and cannot be edited, failed changes leave no history.
 - [tests/auth.test.ts](tests/auth.test.ts) — login codes (one-time, expiry, attempt lock, throttle), domain enforcement, admin allowlist, disabled users, session end.
 - [tests/summary.test.ts](tests/summary.test.ts), [tests/time.test.ts](tests/time.test.ts) — start-of-week vs now reconstruction, deadline flags, Monday boundary, both daylight-saving transitions.

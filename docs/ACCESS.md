@@ -22,16 +22,17 @@
 | Delete a project or history | ❌ | ❌ | ❌ (archive/cancel instead) |
 | Create, rename, recolour, archive locations and teams | ❌ | ❌ | ✅ |
 | Submit a nightly report | ❌ | ✅ (as themselves) | ✅ |
-| See and correct nightly reports | ❌ | The ones they submitted | All |
-| Dashboard (sales charts) and Settings | ❌ | ❌ | ✅ |
-| Weekly summary | ❌ | All projects (no store snapshot) | All projects + store snapshot |
+| See nightly reports and the dashboard | ❌ | ✅ (all locations, migration 010) | ✅ |
+| Correct a nightly report | ❌ | The ones they submitted | Any |
+| Settings (locations and teams) | ❌ | ❌ | ✅ |
+| Weekly summary, with the store snapshot | ❌ | ✅ | ✅ |
 | Change roles / disable accounts | ❌ | ❌ | ❌ in the app (owner scripts only) |
 
-Disabled accounts see and change nothing. **Defaults to confirm with Ekiben:** that every staff member may edit every project (as in Asana), and that only admins see sales.
+Disabled accounts see and change nothing. Everyone signed in seeing sales was the project owner's decision (Oct 21, 2026). **Default to confirm with Ekiben:** that every staff member may edit every project (as in Asana).
 
 ## Where each rule is enforced
 
-1. **Database (authoritative)** — [db/migrations](../db/migrations) (002 for the base rules, 008 for the shared workspace, 009 for nightly reports): row-level security policies decide which rows each user can read or write; triggers restrict archiving to the creator or an admin, keep tasks inside their project, stamp creators, assigners, completers and editors, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE; comments can be changed only by their author, through migration 007).
+1. **Database (authoritative)** — [db/migrations](../db/migrations) (002 for the base rules, 008 for the shared workspace, 009 for nightly reports, 010 for open reports and task-based progress): row-level security policies decide which rows each user can read or write; triggers restrict archiving to the creator or an admin, keep tasks inside their project, stamp creators, assigners, completers and editors, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE; comments can be changed only by their author, through migration 007).
 2. **Server code** — server actions re-check the signed-in user and limit what each form may send.
 3. **Interface** — hides controls the user can't use. This is convenience only.
 

@@ -25,3 +25,13 @@ A disabled account loses access immediately (existing sessions stop working), ca
 
 ## Allowed domains
 Set `ALLOWED_EMAIL_DOMAINS` (comma-separated; exact match, no subdomains). The database re-checks the same list when creating an account.
+
+## Locations and teams without an admin
+
+Admins manage locations and teams in Settings. Before any admin exists, the owner can add them:
+
+```bash
+node --env-file=.env.remote scripts/org.mjs list
+node --env-file=.env.remote scripts/org.mjs add-location "Store name"
+node --env-file=.env.remote scripts/org.mjs add-team "Team name"
+```

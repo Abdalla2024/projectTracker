@@ -33,10 +33,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <div className="page-head">
-        <h1>{month.toFormat("LLLL yyyy")}</h1>
+        <h1>Calendar</h1>
         <div className="seg">
           <Link href={keep(month.minus({ months: 1 }))} aria-label="Previous month">←</Link>
-          <Link href={keep(DateTime.fromISO(today).startOf("month"))}>Today</Link>
+          <Link href={keep(DateTime.fromISO(today).startOf("month"))} aria-current="page" title="Back to this month">{month.toFormat("LLL yyyy")}</Link>
           <Link href={keep(month.plus({ months: 1 }))} aria-label="Next month">→</Link>
         </div>
       </div>

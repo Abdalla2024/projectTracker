@@ -97,6 +97,7 @@ export async function createProjectAction(formData: FormData) {
   await attempt("/?new=1", async () => {
     id = await createProject(user, {
       ...parsed.data, assigneeIds: ids(formData, "assignees"),
+      taskTitles: formData.getAll("task_titles").map((t) => String(t).trim().slice(0, 300)).filter(Boolean).slice(0, 50),
     });
   });
   redirect(`/?open=${id}&saved=1#p-${id}`);
