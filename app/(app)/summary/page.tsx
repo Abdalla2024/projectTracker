@@ -62,7 +62,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
           <ul className="plain">
             {summary.projects.map((p) => (
               <li key={p.id}>
-                <Link href={`/projects/${p.id}`}><b>{p.name}</b></Link>{" "}
+                <Link href={`/?open=${p.id}#p-${p.id}`}><b>{p.name}</b></Link>{" "}
                 <span className={`chip ${p.endStatus}`}>{s(p.endStatus)}</span>
                 {p.newlyBlocked ? <> <span className="chip bad">newly blocked</span></> : null}
                 {p.completed ? <> <span className="chip ok">completed</span></> : null}

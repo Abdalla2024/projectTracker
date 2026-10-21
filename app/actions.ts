@@ -93,14 +93,14 @@ export async function createProjectAction(formData: FormData) {
       ...parsed.data, assigneeIds: ids(formData, "assignees"),
     });
   });
-  redirect(`/projects/${id}?saved=1`);
+  redirect(`/?open=${id}&saved=1#p-${id}`);
 }
 
 export async function updateProjectAction(formData: FormData) {
   const user = await requireUser();
   const id = str(formData, "id");
   if (!isUuid(id)) redirect("/");
-  const back = `/projects/${id}`;
+  const back = `/?open=${id}`;
 
   // What the form may send depends on the user; the database enforces the same rule independently.
   const project = await getProjectDetail(user.id, id);
@@ -114,18 +114,18 @@ export async function updateProjectAction(formData: FormData) {
     (fullEdit ? ["name", "description", "priority", "deadline", "next_step", "status"] : ["status", "next_step"]).map((k) => [k, str(formData, k)]),
   );
   const parsed = schema.safeParse(raw);
-  if (!parsed.success) redirect(`${back}?error=${enc(parsed.error.issues[0].message)}`);
+  if (!parsed.success) redirect(`${back}&error=${enc(parsed.error.issues[0].message)}#p-${id}`);
 
   await attempt(back, () => updateProject(user.id, id, parsed.data as Record<string, string | null>));
-  redirect(`${back}?saved=1`);
+  redirect(`${back}&saved=1#p-${id}`);
 }
 
 export async function assignAction(formData: FormData) {
   const user = await requireUser();
   const id = str(formData, "id");
   if (!isUuid(id)) redirect("/");
-  await attempt(`/projects/${id}`, () => setAssignees(user.id, id, ids(formData, "assignees")));
-  redirect(`/projects/${id}?saved=1`);
+  await attempt(`/?open=${id}`, () => setAssignees(user.id, id, ids(formData, "assignees")));
+  redirect(`/?open=${id}&saved=1#p-${id}`);
 }
 
 export async function commentAction(formData: FormData) {
@@ -133,15 +133,15 @@ export async function commentAction(formData: FormData) {
   const id = str(formData, "id");
   if (!isUuid(id)) redirect("/");
   const parsed = z.string().trim().min(1, "Write a comment first.").max(4000).safeParse(str(formData, "body"));
-  if (!parsed.success) redirect(`/projects/${id}?error=${enc(parsed.error.issues[0].message)}#comments`);
-  await attempt(`/projects/${id}`, () => addComment(user.id, id, parsed.data));
-  redirect(`/projects/${id}#comments`);
+  if (!parsed.success) redirect(`/?open=${id}&error=${enc(parsed.error.issues[0].message)}#p-${id}`);
+  await attempt(`/?open=${id}`, () => addComment(user.id, id, parsed.data));
+  redirect(`/?open=${id}#c-${id}`);
 }
 
 export async function archiveAction(formData: FormData) {
   const user = await requireUser();
   const id = str(formData, "id");
   if (!isUuid(id)) redirect("/");
-  await attempt(`/projects/${id}`, () => setArchived(user.id, id, str(formData, "archive") === "1"));
-  redirect(`/projects/${id}?saved=1`);
+  await attempt(`/?open=${id}`, () => setArchived(user.id, id, str(formData, "archive") === "1"));
+  redirect(`/?open=${id}&saved=1#p-${id}`);
 }

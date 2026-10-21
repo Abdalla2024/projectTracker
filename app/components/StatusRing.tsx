@@ -1,32 +1,46 @@
+import type { CSSProperties } from "react";
 import { STATUS_LABELS } from "@/lib/constants";
 
-// Progress wheel for a project's status: green is good, amber is moving, red is blocked.
-const RING: Record<string, { pct: number; color: string; text: string }> = {
-  not_started: { pct: 0, color: "#a1a1aa", text: "#6b7280" },
-  in_progress: { pct: 55, color: "#f59e0b", text: "#b45309" },
-  blocked: { pct: 28, color: "#dc2626", text: "#b91c1c" },
-  done: { pct: 100, color: "#16a34a", text: "#15803d" },
-  cancelled: { pct: 100, color: "#a1a1aa", text: "#6b7280" },
-};
+// Progress wheel: the arc fills as the project moves along, and its color runs from red (start)
+// through amber to green (done). A white knob marks where the project is now.
+const STOPS: [number, [number, number, number]][] = [
+  [0, [239, 68, 68]], [0.5, [245, 158, 11]], [1, [34, 197, 94]],
+];
+const GRADIENT = "conic-gradient(from 0deg, #ef4444 0%, #f59e0b 50%, #22c55e 100%)";
+const GRAY = "conic-gradient(from 0deg, #cbd0d8, #cbd0d8)";
 
-export function StatusRing({ status, size = 72, compact = false }: { status: string; size?: number; compact?: boolean }) {
-  const { pct, color, text } = RING[status] ?? RING.not_started;
-  const stroke = 6;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
+const PROGRESS: Record<string, number> = { not_started: 0, in_progress: 55, blocked: 25, done: 100, cancelled: 100 };
+
+function colorAt(t: number): string {
+  for (let i = 1; i < STOPS.length; i++) {
+    if (t <= STOPS[i][0]) {
+      const [t0, c0] = STOPS[i - 1];
+      const [t1, c1] = STOPS[i];
+      const k = (t - t0) / (t1 - t0);
+      return `rgb(${c0.map((v, j) => Math.round(v + (c1[j] - v) * k)).join(",")})`;
+    }
+  }
+  return "rgb(34,197,94)";
+}
+
+export function StatusRing({ status, size = 104 }: { status: string; size?: number }) {
+  const pct = PROGRESS[status] ?? 0;
+  const cancelled = status === "cancelled";
+  const stroke = Math.round(size * 0.115);
   const label = STATUS_LABELS[status] ?? status;
+  const style = {
+    "--size": `${size}px`, "--stroke": `${stroke}px`, "--pct": pct,
+    "--grad": cancelled ? GRAY : GRADIENT,
+    "--start": cancelled ? "#cbd0d8" : "#ef4444",
+    "--end": cancelled ? "#cbd0d8" : colorAt(pct / 100),
+  } as CSSProperties;
   return (
-    <div className="ring" style={{ width: size, height: size }} role="img" aria-label={`Status: ${label}`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#eef0f3" strokeWidth={stroke} />
-        {pct > 0 ? (
-          <circle
-            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
-            strokeDasharray={`${(c * pct) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          />
-        ) : null}
-      </svg>
-      {compact ? null : <span className="ring-label" style={{ color: text }}>{label}</span>}
+    <div className="ring" style={style} role="img" aria-label={`Status: ${label}`}>
+      <div className="ring-track" />
+      {pct > 0 ? <div className="ring-arc" /> : null}
+      {pct > 0 ? <div className="ring-cap start"><i /></div> : null}
+      <div className="ring-cap end"><i /><b /></div>
+      <span className="ring-label">{label}</span>
     </div>
   );
 }
