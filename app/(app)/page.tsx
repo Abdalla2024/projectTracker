@@ -92,7 +92,7 @@ export default async function ProjectsPage({
                   <StatusRing status={p.status} progress={p.progress} />
                   <div className="project-main">
                     <span className="title">{p.name}</span>
-                    {p.phase ? <span className="phase">{p.phase}</span> : null}
+                    {p.phase ? <span className="phase">Working on: <b>{p.phase}</b></span> : null}
                     <span className="tags">
                       <span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]} priority</span>
                       {p.archived_at ? <span className="chip">archived</span> : null}

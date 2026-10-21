@@ -234,4 +234,5 @@ dialog.modal form { padding: 30px; }
 .changes summary::-webkit-details-marker { display: none; }
 .changes[open] summary { margin-bottom: 14px; }
 
-.project-main .phase { font-size: .95rem; color: var(--muted); font-weight: 550; }
+.project-main .phase { font-size: .95rem; color: var(--muted); }
+.project-main .phase b { color: var(--text); font-weight: 600; }
