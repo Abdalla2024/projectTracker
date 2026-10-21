@@ -16,7 +16,7 @@ function poolMax(): number {
 function pool(): pg.Pool {
   if (!globalForPool.__trackerPool) {
     const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set (see .env.example).");
+    if (!url) throw new Error("DATABASE_URL is not set.");
     globalForPool.__trackerPool = new pg.Pool({ ...connectionConfig(url, process.env.DATABASE_CA_CERT), max: poolMax() });
   }
   return globalForPool.__trackerPool;

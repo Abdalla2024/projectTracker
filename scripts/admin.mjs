@@ -10,7 +10,7 @@ import { pgConfig } from "./lib/pgconfig.mjs";
 const [cmd, rawEmail] = process.argv.slice(2);
 const url = process.env.DATABASE_ADMIN_URL;
 if (!url) {
-  console.error("DATABASE_ADMIN_URL is not set (see .env.example).");
+  console.error("DATABASE_ADMIN_URL is not set.");
   process.exit(1);
 }
 const email = rawEmail?.trim().toLowerCase();

@@ -2,8 +2,6 @@
 # (Configure real settings in Vercel's Environment Variables instead.)
 .env
 .env.*
-!.env.example
-!.env.remote.example
 .next
 node_modules
 .vercel

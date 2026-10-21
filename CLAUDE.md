@@ -4,7 +4,7 @@ Context and requirements: [docs/tracker-brief.md](docs/tracker-brief.md). Setup,
 
 ## Rules
 - **Protect sensitive data.** Use synthetic data only (`[DEMO]`, `ekiben-demo.example`). No employee, customer, financial, or payroll data in code, seeds, tests, or docs. Never invent people or admin emails.
-- **Never commit secrets.** `.env.local` stays ignored; `.env.example` holds placeholders only. Check staged files before committing.
+- **Never commit secrets.** All `.env*` files stay ignored; no example env files with URLs or passwords. Check staged files before committing.
 - **Ask before** deploying, creating accounts or vendors, sending invitations or email, or adding admins.
 - **Commit after each coherent addition**, with a message saying what and why. End with `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 - **Report only checks actually run.** Give failures with their output, and say what was not verified. Label assumptions; don't present defaults as Ekiben requirements.

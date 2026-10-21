@@ -25,7 +25,7 @@ Requires Node 20.9+ and a local PostgreSQL (tested with Postgres.app 18) where y
 
 ```bash
 npm install
-cp .env.example .env.local          # then edit; see "Configuration"
+# create .env.local (ignored by git) with the variables in "Configuration" below
 npm run db:setup                    # creates the database + restricted app role, applies migrations
 npm run db:seed-demo                # optional: synthetic demo accounts and projects
 npm run dev                         # http://localhost:3000
@@ -44,7 +44,7 @@ Everything seeded is labeled `[DEMO]` / `(synthetic)`. `npm run db:seed-demo -- 
 
 ## Online demo
 
-Deployed on Vercel (https://ekiben-project-tracker.vercel.app) with GitHub connected, using a Supabase-hosted PostgreSQL and an SMTP sender. Sign-in is not usable until the database and email sender are configured. What is needed, setup, verification, and rollback: [docs/PRIVATE-DEMO.md](docs/PRIVATE-DEMO.md). For the remote database use `npm run db:setup:remote` and `npm run admin:remote -- ...`, which read a git-ignored `.env.remote` (template: `.env.remote.example`). `GET /api/health` reports whether a running instance reaches the database as the restricted role with row-level security on.
+Deployed on Vercel (https://ekiben-project-tracker.vercel.app) with GitHub connected, using a Supabase-hosted PostgreSQL and an SMTP sender. Sign-in is not usable until the database and email sender are configured. What is needed, setup, verification, and rollback: [docs/PRIVATE-DEMO.md](docs/PRIVATE-DEMO.md). For the remote database use `npm run db:setup:remote` and `npm run admin:remote -- ...`, which read a git-ignored `.env.remote` (variables listed in [docs/PRIVATE-DEMO.md](docs/PRIVATE-DEMO.md)). `GET /api/health` reports whether a running instance reaches the database as the restricted role with row-level security on.
 
 ## Commands
 
@@ -59,7 +59,7 @@ Deployed on Vercel (https://ekiben-project-tracker.vercel.app) with GitHub conne
 
 ## Configuration
 
-All settings are environment variables; see [.env.example](.env.example) (placeholders only — never commit `.env.local`).
+All settings are environment variables; kept in `.env.local` for local development and in Vercel's settings when deployed. Never commit env files (`.env*` is git-ignored). A local `.env.local` needs `DATABASE_ADMIN_URL` (your local Postgres owner, database `ekiben_tracker`), `DATABASE_URL` (the `tracker_app` role), `APP_DB_PASSWORD`, `ALLOWED_EMAIL_DOMAINS`, `AUTH_SECRET`, and `EMAIL_TRANSPORT=console`.
 
 | Variable | Purpose |
 |---|---|

@@ -13,7 +13,7 @@ const ZONE = process.env.APP_TIME_ZONE || "America/New_York";
 const args = new Set(process.argv.slice(2));
 
 const url = process.env.DATABASE_ADMIN_URL;
-if (!url) fail("DATABASE_ADMIN_URL is not set (see .env.example).");
+if (!url) fail("DATABASE_ADMIN_URL is not set.");
 if (process.env.NODE_ENV === "production") fail("Refusing to seed demo data with NODE_ENV=production.");
 const host = new URL(url).hostname;
 if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host) && !args.has("--allow-remote")) {

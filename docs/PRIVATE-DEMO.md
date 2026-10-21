@@ -12,7 +12,7 @@ The app is deployed on Vercel at **https://ekiben-project-tracker.vercel.app** (
 
 Fill these in **yourself**, in a file, so passwords never appear in chat.
 
-1. **Create `.env.remote`**: `cp .env.remote.example .env.remote` and edit it. It is ignored by git and never uploaded to Vercel. Tell me when it is filled in; I run the setup and copy the right values into Vercel without printing them.
+1. **Create `.env.remote`**: create a file named `.env.remote` containing these variables: `DATABASE_ADMIN_URL` (Supabase Session pooler string, port 5432), `APP_DB_PASSWORD` (a new random password), `DATABASE_CA_CERT_FILE` (absolute path to Supabase's downloaded CA certificate), `DATABASE_URL` (Transaction pooler string, port 6543, with user `tracker_app.<project-ref>` and `APP_DB_PASSWORD`), `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`. `.env.*` is git-ignored. It is ignored by git and never uploaded to Vercel. Tell me when it is filled in; I run the setup and copy the right values into Vercel without printing them.
 2. **From the Supabase dashboard** (click **Connect** at the top of the project):
    - **Session pooler** string (port 5432) → `DATABASE_ADMIN_URL`. Use this one from your computer, not "Direct connection", which is IPv6-only by default ([Supabase docs](https://supabase.com/docs/guides/troubleshooting/supavisor-faq-YyP5tI)). The user looks like `postgres.<project-ref>`; the password is your database password.
    - **Transaction pooler** string (port 6543) → `DATABASE_URL`, but with the user changed to **`tracker_app.<project-ref>`** and the password set to your new `APP_DB_PASSWORD`. Transaction mode is Supabase's recommendation for serverless hosts and does not support prepared statements, which this app does not use.
@@ -59,7 +59,7 @@ Admins later: `npm run admin:remote -- grant person@ekibenbaltimore.com`.
 - **Bad migration:** no automatic undo. Restore from Supabase's backups if your plan has them (check before inviting testers) or write a corrective migration.
 - **Stop access quickly:** `npm run admin:remote -- disable <email>` blocks one person immediately. To take the demo offline, remove `DATABASE_URL` in Vercel and redeploy, or delete the Vercel project.
 - **Rotate secrets:** change `AUTH_SECRET` (invalidates pending login codes only) and the SMTP password in Vercel; rotate the app database password by running `db:setup:remote` with a new `APP_DB_PASSWORD` and updating `DATABASE_URL`.
-- **CLI gotchas:** `vercel link` rewrote local `.env.local` and appended an `.env*` rule to `.gitignore`; both were reverted. `.vercelignore` keeps env files out of CLI uploads (checked: the upload contained `.env.example` only).
+- **CLI gotchas:** `vercel link` rewrote local `.env.local` and appended an `.env*` rule to `.gitignore`; both were reverted. `.vercelignore` keeps env files out of CLI uploads (checked: the upload contained no env files).
 
 ## 5. Verified before the real database exists
 Details and counts: [tracker-brief.md](tracker-brief.md).
