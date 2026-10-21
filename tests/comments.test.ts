@@ -42,8 +42,9 @@ describe("comment threads", () => {
     await expect(post(m1, p1, "missing parent", "00000000-0000-0000-0000-000000000000")).rejects.toThrow();
   });
 
-  it("a member cannot reply on, or even see, a project they have no access to", async () => {
-    await expect(post(m3, p1, "sneaky reply", top)).rejects.toThrow();
+  it("in the shared workspace any member can reply on any project", async () => {
+    const r = await post(m3, p1, "reply from a colleague", top);
+    expect(r).toBeTruthy();
   });
 });
 
@@ -130,9 +131,9 @@ describe("phase and progress", () => {
     expect((await owner.query("select progress from projects where id = $1", [p1])).rows[0].progress).toBe(90);
   });
 
-  it("a member with no access cannot change them", async () => {
+  it("any member can change them in the shared workspace", async () => {
     const r = await asUser(m2, (c) => c.query("update projects set progress = 5 where id = $1", [p1]));
-    expect(r.rowCount).toBe(0);
+    expect(r.rowCount).toBe(1);
   });
 
   it("enforces the 24-character phase limit and the 0-100 range in the database", async () => {

@@ -28,7 +28,7 @@ describe("migration 003: remove stores", () => {
     await migrateToLatest();
     await migrateToLatest();
     expect((await owner.query("select name from schema_migrations order by name")).rows.map((r) => r.name)).toEqual([
-      "001_schema.sql", "002_security.sql", "003_remove_stores.sql", "004_dev_exact_email.sql", "005_revoke_api_roles.sql", "006_passwords.sql", "007_phase_progress_threads.sql",
+      "001_schema.sql", "002_security.sql", "003_remove_stores.sql", "004_dev_exact_email.sql", "005_revoke_api_roles.sql", "006_passwords.sql", "007_phase_progress_threads.sql", "008_shared_workspace.sql", "009_nightly_reports.sql",
     ]);
   });
 
@@ -57,7 +57,7 @@ describe("migration 003: remove stores", () => {
     );
     const ev = await asUser(member, async (c) => (await c.query("select event_type from project_events where project_id = $1", [id])).rows);
     expect(ev).toEqual([{ event_type: "created" }]);
-    const other = await asUser(member, async (c) => (await c.query("select name from projects")).rows.map((r) => r.name));
-    expect(other).toEqual(["After upgrade"]); // still can't see the admin's project
+    const other = await asUser(member, async (c) => (await c.query("select name from projects order by name")).rows.map((r) => r.name));
+    expect(other).toEqual(["After upgrade", "Had a store"]); // shared workspace since migration 008
   });
 });

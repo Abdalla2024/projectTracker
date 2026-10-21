@@ -61,20 +61,11 @@ describe("roles", () => {
   });
 });
 
-describe("project visibility", () => {
-  it("member sees projects they created and projects an admin assigned to them", async () => {
-    expect(await visible(m1)).toEqual(["P1 by member one", "P3 by admin"]);
-    expect(await visible(m3)).toEqual(["P3 by admin"]);
-  });
-
-  it("member does not see another member's unassigned project", async () => {
-    expect(await visible(m2)).toEqual(["P2 by member two"]);
-    const direct = await asUser(m2, (c) => c.query("select * from projects where id = $1", [p1]));
-    expect(direct.rowCount).toBe(0);
-  });
-
-  it("admin sees all projects", async () => {
-    expect(await visible(admin)).toEqual(["P1 by member one", "P2 by member two", "P3 by admin"]);
+// Shared workspace (migration 008): every active account sees and works on every project.
+describe("project visibility (shared workspace)", () => {
+  it("every active member and admin sees every project", async () => {
+    const all = ["P1 by member one", "P2 by member two", "P3 by admin"];
+    for (const uid of [m1, m2, m3, admin]) expect(await visible(uid), uid).toEqual(all);
   });
 
   it("no user context, or a disabled user, sees nothing", async () => {
@@ -82,48 +73,27 @@ describe("project visibility", () => {
     expect(await visible(disabledUser)).toEqual([]);
   });
 
-  it("comments, events and assignees of an invisible project are invisible", async () => {
+  it("comments, events and assignees are shared too, but not with a disabled user", async () => {
     for (const table of ["comments", "project_events", "project_assignees"]) {
-      const r = await asUser(m2, (c) => c.query(`select * from ${table} where project_id = $1`, [p1]));
-      expect(r.rowCount, table).toBe(0);
+      const r = await asUser(m2, (c) => c.query(`select * from ${table} where project_id = $1`, [table === "project_assignees" ? p3 : p1]));
+      expect(r.rowCount, table).toBeGreaterThan(0);
+      const d = await asUser(disabledUser, (c) => c.query(`select * from ${table}`));
+      expect(d.rowCount, `${table} for a disabled user`).toBe(0);
     }
   });
 
-  it("profiles of strangers are hidden; people on shared projects are visible", async () => {
-    const seenByM2 = await asUser(m2, async (c) => (await c.query("select email from profiles")).rows.map((r) => r.email));
-    expect(seenByM2).toEqual(["two@tracker.test"]);
-    const seenByM1 = await asUser(m1, async (c) => (await c.query("select email from profiles")).rows.map((r) => r.email).sort());
-    expect(seenByM1).toEqual(["admin@tracker.test", "one@tracker.test", "three@tracker.test"]);
-  });
-
-  it("an assignment removal revokes access", async () => {
-    const tmp = await createProject(admin, "Temp");
-    await asUser(admin, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [tmp, m2, admin]));
-    expect((await visible(m2)).includes("Temp")).toBe(true);
-    await asUser(admin, (c) => c.query("delete from project_assignees where project_id = $1 and user_id = $2", [tmp, m2]));
-    expect((await visible(m2)).includes("Temp")).toBe(false);
-    const ev = await owner.query("select event_type, old_value from project_events where project_id = $1 and event_type like 'assignee_%' order by id", [tmp]);
-    expect(ev.rows).toEqual([
-      { event_type: "assignee_added", old_value: null },
-      { event_type: "assignee_removed", old_value: "Member Two" },
-    ]);
+  it("everyone active can see everyone's profile (to assign work); a disabled user sees none", async () => {
+    const seen = await asUser(m2, async (c) => (await c.query("select email from profiles")).rows.length);
+    expect(seen).toBeGreaterThanOrEqual(5);
+    expect((await asUser(disabledUser, (c) => c.query("select email from profiles"))).rowCount).toBe(0);
   });
 });
 
-describe("who may change what", () => {
+describe("who may change what (shared workspace)", () => {
   it("a member cannot create a project in someone else's name", async () => {
     await expect(
       asUser(m1, (c) => c.query("insert into projects (name, created_by) values ('forged', $1)", [m2])),
     ).rejects.toThrow(/row-level security/);
-  });
-
-  it("a member cannot edit or comment on a project they cannot see", async () => {
-    const upd = await asUser(m2, (c) => c.query("update projects set name = 'hacked' where id = $1", [p1]));
-    expect(upd.rowCount).toBe(0);
-    await expect(
-      asUser(m2, (c) => c.query("insert into comments (project_id, author_id, body) values ($1,$2,'hi')", [p1, m2])),
-    ).rejects.toThrow(/row-level security/);
-    expect((await owner.query("select name from projects where id = $1", [p1])).rows[0].name).toBe("P1 by member one");
   });
 
   it("a member cannot comment as someone else", async () => {
@@ -132,43 +102,43 @@ describe("who may change what", () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it("only an admin can assign or reassign", async () => {
-    await expect(
-      asUser(m1, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [p1, m1, m1])),
-    ).rejects.toThrow(/row-level security|only an admin/);
-    // Assignee (m3) of p3 cannot add or remove assignees either.
-    await expect(
-      asUser(m3, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [p3, m2, m3])),
-    ).rejects.toThrow(/row-level security|only an admin/);
-    const del = await asUser(m3, (c) => c.query("delete from project_assignees where project_id = $1 and user_id = $2", [p3, m1]));
-    expect(del.rowCount).toBe(0);
+  it("any member can assign and unassign people, and the history records it", async () => {
+    const tmp = await createProject(m1, "Temp");
+    await asUser(m2, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [tmp, m3, m2]));
+    const by = await owner.query("select assigned_by from project_assignees where project_id = $1", [tmp]);
+    expect(by.rows[0].assigned_by).toBe(m2);
+    await asUser(m3, (c) => c.query("delete from project_assignees where project_id = $1 and user_id = $2", [tmp, m3]));
+    const ev = await owner.query("select event_type, old_value from project_events where project_id = $1 and event_type like 'assignee_%' order by id", [tmp]);
+    expect(ev.rows).toEqual([
+      { event_type: "assignee_added", old_value: null },
+      { event_type: "assignee_removed", old_value: "Member Three" },
+    ]);
   });
 
-  it("an admin can assign a project to several members at once, and cannot assign a disabled user", async () => {
-    const n = await asUser(admin, async (c) => (await c.query("select count(*)::int n from project_assignees where project_id = $1", [p3])).rows[0].n);
-    expect(n).toBe(2);
+  it("nobody can assign a disabled user", async () => {
     await expect(
-      asUser(admin, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [p3, disabledUser, admin])),
+      asUser(m1, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [p3, disabledUser, m1])),
     ).rejects.toThrow(/disabled/);
   });
 
-  it("the creator can edit their own project", async () => {
-    await asUser(m1, (c) => c.query("update projects set name = 'P1 renamed', priority = 'high' where id = $1", [p1]));
+  it("any member can edit any project's details", async () => {
+    await asUser(m3, (c) => c.query("update projects set status = 'in_progress', next_step = 'call vendor' where id = $1", [p3]));
+    await asUser(m2, (c) => c.query("update projects set name = 'P1 renamed', priority = 'high' where id = $1", [p1]));
     expect((await owner.query("select name, priority from projects where id = $1", [p1])).rows[0]).toEqual({ name: "P1 renamed", priority: "high" });
     await asUser(m1, (c) => c.query("update projects set name = 'P1 by member one', priority = 'normal' where id = $1", [p1]));
   });
 
-  it("an assigned member can change only status and next step", async () => {
-    await asUser(m3, (c) => c.query("update projects set status = 'in_progress', next_step = 'call vendor' where id = $1", [p3]));
-    for (const sql of [
-      "update projects set name = 'x' where id = $1",
-      "update projects set description = 'x' where id = $1",
-      "update projects set priority = 'high' where id = $1",
-      "update projects set deadline = '2030-01-01' where id = $1",
-      "update projects set archived_at = now() where id = $1",
-    ]) {
-      await expect(asUser(m3, (c) => c.query(sql, [p3])), sql).rejects.toThrow(/only change status and next step/);
-    }
+  it("only the creator or an admin can archive or restore a project", async () => {
+    await expect(asUser(m2, (c) => c.query("update projects set archived_at = now() where id = $1", [p1]))).rejects.toThrow(/only the creator or an admin/);
+    await asUser(m1, (c) => c.query("update projects set archived_at = now() where id = $1", [p1]));
+    await expect(asUser(m2, (c) => c.query("update projects set archived_at = null where id = $1", [p1]))).rejects.toThrow(/only the creator or an admin/);
+    await asUser(admin, (c) => c.query("update projects set archived_at = null where id = $1", [p1]));
+  });
+
+  it("a disabled user cannot change anything", async () => {
+    const r = await asUser(disabledUser, (c) => c.query("update projects set name = 'x' where id = $1", [p1]));
+    expect(r.rowCount).toBe(0);
+    await expect(asUser(disabledUser, (c) => c.query("insert into comments (project_id, author_id, body) values ($1,$2,'hi')", [p1, disabledUser]))).rejects.toThrow(/row-level security/);
   });
 
   it("creator, id and creation time can never change, even for an admin", async () => {
@@ -178,9 +148,7 @@ describe("who may change what", () => {
     ).rejects.toThrow(/cannot change/);
   });
 
-  it("an admin can edit any project and archive it; nobody can delete one", async () => {
-    await asUser(admin, (c) => c.query("update projects set priority = 'low', archived_at = now() where id = $1", [p2]));
-    await asUser(admin, (c) => c.query("update projects set archived_at = null where id = $1", [p2]));
+  it("nobody can delete a project", async () => {
     await expect(asUser(admin, (c) => c.query("delete from projects where id = $1", [p2]))).rejects.toThrow(/permission denied/);
   });
 
