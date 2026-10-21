@@ -24,6 +24,8 @@ export interface ProjectRow {
   created_by: string;
   creator_name: string;
   assignees: Person[];
+  location_id?: string | null;
+  team_id?: string | null;
 }
 
 export interface EventRow {

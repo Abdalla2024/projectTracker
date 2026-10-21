@@ -6,7 +6,10 @@ import { ProgressField } from "@/app/components/ProgressField";
 
 interface Props {
   people: { id: string; name: string }[];
-  isAdmin: boolean;
+  locations: { id: string; name: string }[];
+  teams: { id: string; name: string }[];
+  defaultLocation?: string | null;
+  defaultTeam?: string | null;
   statuses: { value: string; label: string }[];
   priorities: { value: string; label: string }[];
   phaseMax: number;
@@ -14,7 +17,7 @@ interface Props {
   error?: string;
 }
 
-export function NewProjectModal({ people, isAdmin, statuses, priorities, phaseMax, defaultOpen, error }: Props) {
+export function NewProjectModal({ people, locations, teams, defaultLocation, defaultTeam, statuses, priorities, phaseMax, defaultOpen, error }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (defaultOpen) ref.current?.showModal();
@@ -39,6 +42,20 @@ export function NewProjectModal({ people, isAdmin, statuses, priorities, phaseMa
           <label htmlFor="np-description">Description</label>
           <textarea id="np-description" name="description" maxLength={5000} />
           <div className="grid2">
+            <div>
+              <label htmlFor="np-location">Location</label>
+              <select id="np-location" name="location_id" defaultValue={defaultLocation ?? ""}>
+                <option value="">None</option>
+                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="np-team">Team</label>
+              <select id="np-team" name="team_id" defaultValue={defaultTeam ?? ""}>
+                <option value="">None</option>
+                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
             <div>
               <label htmlFor="np-status">Status</label>
               <select id="np-status" name="status" defaultValue="not_started">
@@ -68,7 +85,7 @@ export function NewProjectModal({ people, isAdmin, statuses, priorities, phaseMa
               <ProgressField id="np-progress" />
             </div>
           </div>
-          {isAdmin ? (
+          {people.length ? (
             <>
               <label>Assign to (one or more)</label>
               <div className="checks">

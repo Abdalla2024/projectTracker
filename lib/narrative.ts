@@ -31,6 +31,16 @@ const MAX_DESCRIPTION = 220;
 const MAX_COMMENT = 200;
 const MAX_COMMENTS_SHOWN = 3;
 
+export interface SummaryTask {
+  id: string;
+  project_id: string;
+  title: string;
+  parent_id: string | null;
+  due_date: string | null;
+  completed_at: Date | null;
+  assignee_name: string | null;
+}
+
 export interface SummaryComment {
   id: string;
   project_id: string;
@@ -90,6 +100,7 @@ export function buildNarrative(input: {
   /** "this week" for the current week, "that week" for earlier ones. */
   period: string;
   comments?: SummaryComment[];
+  tasks?: SummaryTask[];
 }): NarrativePerson[] {
   const { start, end, zone, period } = input;
   const commentsByProject = new Map<string, SummaryComment[]>();
@@ -155,6 +166,21 @@ export function buildNarrative(input: {
       if (s0 && s0.progress !== s1.progress) moved.push(`progress went from ${s0.progress}% to ${s1.progress}%`);
       if (s0 === null) moved.unshift("the project was created");
       if (moved.length) sentences.push(`${period[0].toUpperCase()}${period.slice(1)}, ${list(moved)}.`);
+
+      const projectTasks = (input.tasks ?? []).filter((t) => t.project_id === project.id && !t.parent_id);
+      const finished = projectTasks.filter((t) => t.completed_at && t.completed_at > start && t.completed_at <= end);
+      if (finished.length) {
+        const names = finished.slice(0, 5).map((t) => `“${plain(t.title).trim()}”`);
+        const more = finished.length > 5 ? ` and ${finished.length - 5} more` : "";
+        sentences.push(`${period[0].toUpperCase()}${period.slice(1)}, ${plural(finished.length, "task")} ${finished.length === 1 ? "was" : "were"} completed: ${list(names)}${more}.`);
+      }
+      const endDate = DateTime.fromJSDate(end, { zone }).toISODate()!;
+      const overdue = projectTasks.filter((t) => !t.completed_at && t.due_date && t.due_date < endDate);
+      if (open && overdue.length) {
+        const names = overdue.slice(0, 3).map((t) => `“${plain(t.title).trim()}”${t.assignee_name ? ` (${t.assignee_name})` : ""}`);
+        const more = overdue.length > 3 ? ` and ${overdue.length - 3} more` : "";
+        sentences.push(`${plural(overdue.length, "task")} ${overdue.length === 1 ? "is" : "are"} overdue: ${list(names)}${more}.`);
+      }
 
       const said = (commentsByProject.get(project.id) ?? []).slice().sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
       const shown = said.slice(-MAX_COMMENTS_SHOWN);

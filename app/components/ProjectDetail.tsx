@@ -1,14 +1,18 @@
 import { archiveAction, assignAction, commentAction, deleteCommentAction, editCommentAction, updateProjectAction } from "@/app/actions";
 import { Alerts } from "@/app/components/Alerts";
+import { TaskPanel } from "@/app/components/TaskPanel";
 import { ProgressField } from "@/app/components/ProgressField";
 import { PHASE_MAX, PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
 import type { SessionUser } from "@/lib/auth";
 import { describeEvent } from "@/lib/format";
 import type { CommentRow, getProjectDetail, listPeople } from "@/lib/projects";
+import type { getProjectTasks } from "@/lib/tasks";
 import { formatDate, formatDateTime } from "@/lib/time";
 
 type Project = NonNullable<Awaited<ReturnType<typeof getProjectDetail>>>;
 type People = Awaited<ReturnType<typeof listPeople>>;
+type Tasks = Awaited<ReturnType<typeof getProjectTasks>>;
+type Unit = { id: string; name: string };
 
 function Comment({ c, project, user, zone, isReply }: { c: CommentRow; project: Project; user: SessionUser; zone: string; isReply?: boolean }) {
   const mine = c.author_id === user.id;
@@ -63,10 +67,10 @@ function Comment({ c, project, user, zone, isReply }: { c: CommentRow; project: 
 
 /** The expanded part of a project card: details, editing, assignees (admins), comments and history. */
 export function ProjectDetail({
-  project, user, people, zone, error, saved,
-}: { project: Project; user: SessionUser; people: People; zone: string; error?: string; saved?: string }) {
-  const isAdmin = user.role === "admin";
-  const fullEdit = isAdmin || project.created_by === user.id;
+  project, tasks, user, people, locations, teams, zone, today, error, saved,
+}: { project: Project; tasks: Tasks; user: SessionUser; people: People; locations: Unit[]; teams: Unit[]; zone: string; today: string; error?: string; saved?: string }) {
+  // Shared workspace: everyone edits; archiving stays with the creator or an admin (enforced in the database).
+  const canArchive = user.role === "admin" || project.created_by === user.id;
   const assigned = new Set(project.assignees.map((a) => a.id));
   const id = project.id;
   const top = project.comments.filter((c) => !c.parent_id);
@@ -77,6 +81,7 @@ export function ProjectDetail({
   return (
     <div className="detail" id={`d-${id}`}>
       <Alerts error={error} saved={saved} />
+      <TaskPanel projectId={id} sections={tasks.sections} tasks={tasks.tasks} people={people} today={today} />
       <div className="detail-cols">
         <div>
           <section className="sub">
@@ -95,31 +100,39 @@ export function ProjectDetail({
           </section>
 
           <form action={updateProjectAction} className="sub">
-            <h3>{fullEdit ? "Edit project" : "Update progress"}</h3>
+            <h3>Edit project</h3>
             <input type="hidden" name="id" value={id} />
-            {fullEdit ? (
-              <>
-                <label htmlFor={`name-${id}`}>Name</label>
-                <input id={`name-${id}`} name="name" type="text" required maxLength={200} defaultValue={project.name} />
-                <label htmlFor={`desc-${id}`}>Description</label>
-                <textarea id={`desc-${id}`} name="description" maxLength={5000} defaultValue={project.description} />
-              </>
-            ) : null}
+            <label htmlFor={`name-${id}`}>Name</label>
+            <input id={`name-${id}`} name="name" type="text" required maxLength={200} defaultValue={project.name} />
+            <label htmlFor={`desc-${id}`}>Description</label>
+            <textarea id={`desc-${id}`} name="description" maxLength={5000} defaultValue={project.description} />
             <div className="grid2">
+              <div>
+                <label htmlFor={`loc-${id}`}>Location</label>
+                <select id={`loc-${id}`} name="location_id" defaultValue={project.location_id ?? ""}>
+                  <option value="">None</option>
+                  {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor={`team-${id}`}>Team</label>
+                <select id={`team-${id}`} name="team_id" defaultValue={project.team_id ?? ""}>
+                  <option value="">None</option>
+                  {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
               <div>
                 <label htmlFor={`status-${id}`}>Status</label>
                 <select id={`status-${id}`} name="status" defaultValue={project.status}>
                   {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                 </select>
               </div>
-              {fullEdit ? (
-                <div>
-                  <label htmlFor={`priority-${id}`}>Priority</label>
-                  <select id={`priority-${id}`} name="priority" defaultValue={project.priority}>
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
-                  </select>
-                </div>
-              ) : null}
+              <div>
+                <label htmlFor={`priority-${id}`}>Priority</label>
+                <select id={`priority-${id}`} name="priority" defaultValue={project.priority}>
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+                </select>
+              </div>
               <div>
                 <label htmlFor={`phase-${id}`}>Current phase</label>
                 <input id={`phase-${id}`} name="phase" type="text" maxLength={PHASE_MAX} defaultValue={project.phase} placeholder="e.g. Drafting menu" />
@@ -128,12 +141,10 @@ export function ProjectDetail({
                 <label htmlFor={`progress-${id}`}>Progress</label>
                 <ProgressField id={`progress-${id}`} defaultValue={project.progress} />
               </div>
-              {fullEdit ? (
-                <div>
-                  <label htmlFor={`deadline-${id}`}>Deadline</label>
-                  <input id={`deadline-${id}`} name="deadline" type="date" defaultValue={project.deadline ?? ""} />
-                </div>
-              ) : null}
+              <div>
+                <label htmlFor={`deadline-${id}`}>Deadline</label>
+                <input id={`deadline-${id}`} name="deadline" type="date" defaultValue={project.deadline ?? ""} />
+              </div>
               <div>
                 <label htmlFor={`next-${id}`}>Next step</label>
                 <input id={`next-${id}`} name="next_step" type="text" maxLength={500} defaultValue={project.next_step} />
@@ -142,7 +153,7 @@ export function ProjectDetail({
             <p><button type="submit">Save changes</button></p>
           </form>
 
-          {isAdmin ? (
+          {people.length ? (
             <form action={assignAction} className="sub">
               <h3>Assignees</h3>
               <input type="hidden" name="id" value={id} />
@@ -190,7 +201,7 @@ export function ProjectDetail({
             </ul>
           </section>
 
-          {fullEdit ? (
+          {canArchive ? (
             <form action={archiveAction} className="archive-row">
               <input type="hidden" name="id" value={id} />
               <input type="hidden" name="archive" value={project.archived_at ? "0" : "1"} />

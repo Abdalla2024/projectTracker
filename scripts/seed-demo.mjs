@@ -34,17 +34,24 @@ const demoUsers = [
   { key: "m3", email: `demo.member3@${DEMO_DOMAIN}`, name: "Demo Member Three (synthetic)" },
 ];
 
-const triggerTables = ["projects", "project_events", "comments", "project_assignees"];
+const triggerTables = ["projects", "project_events", "comments", "project_assignees", "tasks", "sections", "nightly_reports"];
+const DEMO_PREFIX = "[DEMO] ";
 
 async function resetDemo() {
   await client.query("begin");
   try {
     for (const t of triggerTables) await client.query(`alter table ${t} disable trigger user`);
     const ids = `select id from projects where created_by in (select id from profiles where email like '%@${DEMO_DOMAIN}')`;
+    await client.query(`delete from nightly_reports where submitted_by in (select id from profiles where email like '%@${DEMO_DOMAIN}')`);
+    await client.query(`delete from tasks where project_id in (${ids})`);
+    await client.query(`delete from sections where project_id in (${ids})`);
     await client.query(`delete from project_events where project_id in (${ids})`);
     await client.query(`delete from comments where project_id in (${ids})`);
     await client.query(`delete from project_assignees where project_id in (${ids})`);
     await client.query(`delete from projects where id in (${ids})`);
+    // Demo locations and teams, unless something real still points at them.
+    await client.query(`delete from locations l where l.name like '[DEMO]%' and not exists (select 1 from projects p where p.location_id = l.id) and not exists (select 1 from nightly_reports r where r.location_id = l.id)`);
+    await client.query(`delete from teams t where t.name like '[DEMO]%' and not exists (select 1 from projects p where p.team_id = t.id)`);
     for (const t of triggerTables) await client.query(`alter table ${t} enable trigger user`);
     await client.query("commit");
   } catch (e) {
@@ -153,6 +160,55 @@ try {
   await step(old(10), "m2", (c) => set(c, P.signage, "status = 'cancelled'"));
   await step(old(9), "m2", (c) => set(c, P.signage, "archived_at = now()"));
 
+  // 8. Organisation: synthetic locations (stores) and teams (positions). Names are placeholders.
+  const COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"];
+  const LOC = {};
+  for (const [i, n] of ["Location A", "Location B", "Location C", "Location D"].entries()) {
+    LOC[n] = (await client.query(
+      `insert into locations (name, color, sort_order) values ($1, $2, $3) on conflict (name) do update set color = excluded.color returning id`,
+      [DEMO_PREFIX + n, COLORS[i], i])).rows[0].id;
+  }
+  const TEAM = {};
+  for (const [i, [n, c]] of [["Operations", "#6250d6"], ["HR", "#e87ba4"], ["Chief of Staff", "#008300"], ["Marketing", "#e34948"]].entries()) {
+    TEAM[n] = (await client.query(
+      `insert into teams (name, color, sort_order) values ($1, $2, $3) on conflict (name) do update set color = excluded.color returning id`,
+      [DEMO_PREFIX + n, c, i])).rows[0].id;
+  }
+  const file = [
+    [P.checklist, "Location A", "Operations"], [P.catering, "Location B", "Marketing"], [P.soap, "Location C", "Operations"],
+    [P.allergen, "Location A", "Chief of Staff"], [P.patio, "Location D", "Operations"], [P.fellow, null, "Chief of Staff"], [P.signage, "Location B", null],
+  ];
+  await step(old(12, 2), "admin", async (c) => {
+    for (const [pid, l, t] of file) {
+      await c.query("update projects set location_id = $2, team_id = $3 where id = $1", [pid, l ? LOC[l] : null, t ? TEAM[t] : null]);
+    }
+  });
+
+  // 9. Sections and tasks (Asana-style), with a few finished this week.
+  const T = {};
+  const task = async (c, pid, title, extra = {}) =>
+    (await c.query(
+      `insert into tasks (project_id, section_id, parent_id, title, assignee_id, due_date, created_by, sort_order)
+       values ($1,$2,$3,$4,$5,$6,app_user_id(), coalesce((select max(sort_order) + 1 from tasks where project_id = $1), 0)) returning id`,
+      [pid, extra.section ?? null, extra.parent ?? null, title, extra.who ? id[extra.who] : null, extra.due ?? null])).rows[0].id;
+  await step(old(8), "admin", async (c) => {
+    const todo = (await c.query("insert into sections (project_id, name, sort_order) values ($1, 'To do', 0) returning id", [P.patio])).rows[0].id;
+    const doing = (await c.query("insert into sections (project_id, name, sort_order) values ($1, 'Doing', 1) returning id", [P.patio])).rows[0].id;
+    T.measure = await task(c, P.patio, "Measure the patio", { section: doing, who: "m2", due: dateIn(-1) });
+    T.quotes = await task(c, P.patio, "Get two furniture quotes", { section: todo, who: "m3", due: dateIn(5) });
+    T.heaters = await task(c, P.patio, "Check heater permits", { section: todo, who: "m2", due: dateIn(12) });
+    T.q1 = await task(c, P.patio, "Quote from vendor 1", { parent: T.quotes, who: "m3" });
+    T.q2 = await task(c, P.patio, "Quote from vendor 2", { parent: T.quotes, who: "m3" });
+    T.draft = await task(c, P.checklist, "Draft the opening checklist", { who: "m1", due: dateIn(-2) });
+    T.trial = await task(c, P.checklist, "Trial on one shift", { who: "m2", due: dateIn(3) });
+    T.print = await task(c, P.catering, "Get print proofs", { who: "m2", due: dateIn(-3) });
+    T.walk = await task(c, P.fellow, "Run a staff walkthrough", { who: "m1", due: dateIn(2) });
+    T.train = await task(c, P.fellow, "Write a one-page how-to", { who: "m1", due: dateIn(6) });
+  });
+  await step(week(0.3), "m1", (c) => c.query("update tasks set completed_at = now() where id = $1", [T.draft]));
+  await step(week(0.4), "m3", (c) => c.query("update tasks set completed_at = now() where id = any($1)", [[T.q1]]));
+  await step(week(0.5), "m2", (c) => c.query("update tasks set completed_at = now() where id = $1", [T.measure]));
+
   // Apply the intended timestamps. This is an owner-only operation done once, inside one
   // transaction, with the append-only/history triggers switched off and back on.
   await client.query("begin");
@@ -166,10 +222,60 @@ try {
       await client.query("update projects set updated_at = $1 where updated_at = $2::timestamptz", [s.at, s.stamp]);
       await client.query("update comments set created_at = $1 where created_at = $2::timestamptz", [s.at, s.stamp]);
       await client.query("update project_assignees set assigned_at = $1 where assigned_at = $2::timestamptz", [s.at, s.stamp]);
+      await client.query("update tasks set created_at = $1 where created_at = $2::timestamptz", [s.at, s.stamp]);
+      await client.query("update tasks set updated_at = $1 where updated_at = $2::timestamptz", [s.at, s.stamp]);
+      await client.query("update tasks set completed_at = $1 where completed_at = $2::timestamptz", [s.at, s.stamp]);
+      await client.query("update sections set created_at = $1 where created_at = $2::timestamptz", [s.at, s.stamp]);
       if (P.signage) await client.query("update projects set archived_at = $1 where archived_at = $2::timestamptz", [s.at, s.stamp]);
     }
     for (const t of triggerTables) await client.query(`alter table ${t} enable trigger user`);
     await client.query("commit");
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  }
+
+  // 10. Nightly reports: about four months of made-up nights for the four demo locations. The numbers
+  // follow simple synthetic patterns (weekends busier, bad weather quieter) so the charts show something.
+  let seed = 20261021;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  const base = { "Location A": 4200, "Location B": 3600, "Location C": 5100, "Location D": 2900 };
+  const owner = { "Location A": "m1", "Location B": "m2", "Location C": "m3", "Location D": "m1" };
+  const dayMult = [0.85, 0.9, 0.95, 1.0, 1.3, 1.4, 1.15]; // Mon..Sun
+  const weatherMult = { sunny: 1.08, partly_cloudy: 1.04, cloudy: 1.0, fog: 0.95, windy: 0.96, rain: 0.82, storm: 0.66, snow: 0.6 };
+  const feedback = ["Guests loved the new special.", "Two complaints about wait times at the counter.", "Regular asked about gluten-free options.", "Compliment on friendly service."];
+  const staffing = ["One call-out on the dinner shift.", "Short one line cook from 6pm.", "New hire shadowed the closing shift.", "Late arrival, covered by the opener."];
+  const waste = ["Over-prepped rice; about two pans thrown out.", "Dropped tray of sauce, one batch.", "Expired herbs discarded.", "Normal closing waste."];
+  const events = ["Catering order for a demo office lunch on Friday.", "Local street fair next weekend.", "Holiday hours start next week.", "School event nearby on Thursday."];
+  await client.query("begin");
+  try {
+    await client.query("select set_config('app.user_id', $1, true)", [id.admin]);
+    let n = 0;
+    for (let back = 120; back >= 1; back--) {
+      const day = today.minus({ days: back });
+      const doy = day.ordinal;
+      const meanT = 56 - 22 * Math.cos((2 * Math.PI * (doy - 20)) / 365);
+      const temp = Math.round(meanT + (rnd() - 0.5) * 14);
+      const weather = temp < 33 && rnd() < 0.25 ? "snow" : pick(["sunny", "sunny", "partly_cloudy", "partly_cloudy", "cloudy", "cloudy", "rain", "rain", "windy", "fog", "storm"]);
+      for (const [name, lid] of Object.entries(LOC)) {
+        if (back <= 6 && rnd() < 0.12) continue; // a few recent nights missing, so the dashboard shows gaps
+        const tempMult = 1 + Math.max(-0.12, Math.min(0.08, (temp - 60) / 250));
+        const sales = Math.round(base[name] * dayMult[day.weekday - 1] * weatherMult[weather] * tempMult * (0.9 + rnd() * 0.2) * 100) / 100;
+        const ticket = Math.round((8 + (sales / base[name]) * 9 + rnd() * 8) * 2) / 2;
+        const maybe = (xs, p) => (rnd() < p ? pick(xs) : "");
+        await client.query(
+          `insert into nightly_reports (location_id, report_date, sales, manager_on_duty, weather, temperature_f, longest_ticket_minutes,
+             general_notes, customer_feedback, staffing_issues, waste_log, upcoming_events, submitted_by)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [lid, day.toISODate(), sales, `Demo Manager ${name.slice(-1)}${1 + (day.weekday % 2)}`, weather, temp, ticket,
+           maybe(["Steady night.", "Busy dinner rush.", "Quiet after 8pm."], 0.6), maybe(feedback, 0.3), maybe(staffing, 0.2), maybe(waste, 0.35), maybe(events, 0.12), id[owner[name]]],
+        );
+        n++;
+      }
+    }
+    await client.query("commit");
+    console.log(`Seeded ${n} synthetic nightly reports for 4 demo locations.`);
   } catch (e) {
     await client.query("rollback");
     throw e;

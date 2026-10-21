@@ -2,7 +2,7 @@ import "server-only";
 import type pg from "pg";
 import { withUser } from "./db";
 import type { EventRow, ProjectRow } from "./summary";
-import type { SummaryComment } from "./narrative";
+import type { SummaryComment, SummaryTask } from "./narrative";
 
 // Note: none of these functions filter by "who may see this". The database does that (row-level
 // security). They are plain queries; a bug here can show less, never more, than the user may see.
@@ -21,6 +21,14 @@ export interface ProjectListItem {
   created_by: string;
   creator_name: string;
   assignees: string[];
+  location_id: string | null;
+  location_name: string | null;
+  location_color: string | null;
+  team_id: string | null;
+  team_name: string | null;
+  team_color: string | null;
+  tasks_total: number;
+  tasks_done: number;
 }
 
 export interface Person { id: string; name: string; email?: string }
@@ -51,6 +59,8 @@ export interface ProjectDetail {
   updated_at: Date;
   created_by: string;
   creator_name: string;
+  location_id: string | null;
+  team_id: string | null;
   assignees: Person[];
   comments: CommentRow[];
   events: (EventRow & { actor_name: string })[];
@@ -68,8 +78,14 @@ export async function listProjects(userId: string, includeArchived: boolean): Pr
               p.updated_at, p.created_by, cr.display_name as creator_name,
               coalesce((select json_agg(pr.display_name order by pr.display_name)
                         from project_assignees a join profiles pr on pr.id = a.user_id
-                        where a.project_id = p.id), '[]') as assignees
+                        where a.project_id = p.id), '[]') as assignees,
+              p.location_id, l.name as location_name, l.color as location_color,
+              p.team_id, t.name as team_name, t.color as team_color,
+              (select count(*)::int from tasks k where k.project_id = p.id and k.parent_id is null) as tasks_total,
+              (select count(*)::int from tasks k where k.project_id = p.id and k.parent_id is null and k.completed_at is not null) as tasks_done
        from projects p join profiles cr on cr.id = p.created_by
+       left join locations l on l.id = p.location_id
+       left join teams t on t.id = p.team_id
        where ($1 or p.archived_at is null)
        order by (p.status in ('done','cancelled')), p.deadline nulls last, p.updated_at desc`,
       [includeArchived],
@@ -84,7 +100,8 @@ export async function getProjectDetail(userId: string, id: string): Promise<Proj
     const p = (
       await c.query(
         `select p.id, p.name, p.description, p.status, p.priority, p.deadline::text as deadline, p.next_step,
-                p.phase, p.progress, p.archived_at, p.created_at, p.updated_at, p.created_by, cr.display_name as creator_name
+                p.phase, p.progress, p.archived_at, p.created_at, p.updated_at, p.created_by, cr.display_name as creator_name,
+                p.location_id, p.team_id
          from projects p join profiles cr on cr.id = p.created_by where p.id = $1`,
         [id],
       )
@@ -106,7 +123,7 @@ export async function getProjectDetail(userId: string, id: string): Promise<Proj
   });
 }
 
-/** People an admin can assign (all enabled accounts). A member only gets themselves and project colleagues. */
+/** Everyone who can be assigned work (all enabled accounts). */
 export async function listPeople(userId: string): Promise<Person[]> {
   return withUser(userId, async (c) =>
     (await c.query("select id, display_name as name, email from profiles where not disabled order by display_name")).rows,
@@ -122,26 +139,26 @@ export interface NewProject {
   next_step: string;
   phase: string;
   progress: number;
-  /** Honored only for admins; the database refuses it otherwise. */
+  location_id: string | null;
+  team_id: string | null;
   assigneeIds: string[];
 }
 
-export async function createProject(user: { id: string; role: string }, input: NewProject): Promise<string> {
+export async function createProject(user: { id: string }, input: NewProject): Promise<string> {
   return withUser(user.id, async (c) => {
     const r = await c.query(
-      `insert into projects (name, description, status, priority, deadline, next_step, phase, progress, created_by)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id`,
-      [input.name, input.description, input.status, input.priority, input.deadline, input.next_step, input.phase, input.progress, user.id],
+      `insert into projects (name, description, status, priority, deadline, next_step, phase, progress, location_id, team_id, created_by)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id`,
+      [input.name, input.description, input.status, input.priority, input.deadline, input.next_step, input.phase, input.progress,
+       input.location_id, input.team_id, user.id],
     );
     const id: string = r.rows[0].id;
-    if (user.role === "admin") {
-      await replaceAssignees(c, id, input.assigneeIds, user.id);
-    }
+    await replaceAssignees(c, id, input.assigneeIds, user.id);
     return id;
   });
 }
 
-const EDITABLE = ["name", "description", "status", "priority", "deadline", "next_step", "phase", "progress"] as const;
+const EDITABLE = ["name", "description", "status", "priority", "deadline", "next_step", "phase", "progress", "location_id", "team_id"] as const;
 export type ProjectPatch = Partial<Record<(typeof EDITABLE)[number], string | number | null>>;
 
 export async function updateProject(userId: string, id: string, patch: ProjectPatch): Promise<void> {
@@ -198,12 +215,12 @@ export async function deleteComment(userId: string, projectId: string, commentId
 }
 
 /** Everything the weekly summary needs, already limited to what this user may see. */
-export async function loadSummaryData(userId: string, since: Date): Promise<{ projects: ProjectRow[]; events: EventRow[]; comments: SummaryComment[] }> {
+export async function loadSummaryData(userId: string, since: Date): Promise<{ projects: ProjectRow[]; events: EventRow[]; comments: SummaryComment[]; tasks: SummaryTask[] }> {
   return withUser(userId, async (c) => {
     const projects = (
       await c.query(
         `select p.id, p.name, p.status, p.priority, p.deadline::text as deadline, p.next_step, p.description, p.phase, p.progress,
-                p.archived_at, p.created_at, p.created_by, cr.display_name as creator_name,
+                p.archived_at, p.created_at, p.created_by, cr.display_name as creator_name, p.location_id, p.team_id,
                 coalesce((select json_agg(json_build_object('id', pr.id, 'name', pr.display_name))
                           from project_assignees a join profiles pr on pr.id = a.user_id where a.project_id = p.id), '[]') as assignees
          from projects p join profiles cr on cr.id = p.created_by`,
@@ -216,6 +233,12 @@ export async function loadSummaryData(userId: string, since: Date): Promise<{ pr
         [since],
       )
     ).rows as EventRow[];
+    const tasks = (
+      await c.query(
+        `select k.id, k.project_id, k.title, k.parent_id, k.due_date::text as due_date, k.completed_at, pr.display_name as assignee_name
+         from tasks k left join profiles pr on pr.id = k.assignee_id`,
+      )
+    ).rows as SummaryTask[];
     const comments = (
       await c.query(
         `select c.id, c.project_id, pr.display_name as author_name, c.body, c.parent_id, c.created_at, c.deleted_at
@@ -224,6 +247,6 @@ export async function loadSummaryData(userId: string, since: Date): Promise<{ pr
         [since],
       )
     ).rows as SummaryComment[];
-    return { projects, events, comments };
+    return { projects, events, comments, tasks };
   });
 }

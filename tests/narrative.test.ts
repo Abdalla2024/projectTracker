@@ -228,3 +228,22 @@ describe("sentence quality check", () => {
     }
   });
 });
+
+describe("tasks in the write-up", () => {
+  const t = (id: string, title: string, extra: Record<string, unknown> = {}) => ({
+    id, project_id: "a", title, parent_id: null, due_date: null, completed_at: null, assignee_name: null, ...extra,
+  });
+  it("names tasks completed in the period, and overdue open tasks with who has them", () => {
+    const tasks = [
+      t("1", "Order signs", { completed_at: at(5) }),
+      t("2", "Book painter", { completed_at: at(6) }),
+      t("3", "Old task", { completed_at: before(30) }),
+      t("4", "Call landlord", { due_date: "2026-10-20", assignee_name: "Alex Kim" }),
+      t("5", "Sub task done", { completed_at: at(7), parent_id: "1" }),
+      t("6", "Future task", { due_date: "2026-12-01" }),
+    ];
+    const s = buildNarrative({ projects: [proj("a", "Menu refresh")], events: [], tasks, start: START, end: END, zone: Z, period: "this week" })[0].projects[0].sentences;
+    expect(s).toContain("This week, 2 tasks were completed: “Order signs” and “Book painter”.");
+    expect(s).toContain("1 task is overdue: “Call landlord” (Alex Kim).");
+  });
+});

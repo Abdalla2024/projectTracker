@@ -1,12 +1,12 @@
 # Ekiben Project Tracker (demo)
 
-An internal web app for tracking company projects at Ekiben (a Baltimore restaurant group) — including the work done during the AI Builder fellowship. Staff sign in with a verified Ekiben email address, create projects, and comment on them; admins see everything and assign projects to one or more people. A weekly summary compares where every project stood at Monday 12:00 AM (America/New_York) with where it stands now.
+An internal web app for Ekiben (a Baltimore restaurant group): a shared, Asana-style project tracker plus nightly store reports. Everyone signed in sees every project, organised by location (store) and team (position), with list and board views, tasks and subtasks, My tasks, a calendar, comments, and a progress ring per project. Managers file a nightly report per store; admins get a dashboard of sales, weather, temperature and ticket times. A written weekly summary compares every project at Monday 12:00 AM (America/New_York) with now.
 
 Project context, requirements, decisions, open questions, and what is unverified: [docs/tracker-brief.md](docs/tracker-brief.md). Contributor guidance: [CLAUDE.md](CLAUDE.md).
 
 **Status: initial demo.** Built to run locally and to be shown to Ekiben. Production deployment is a separate, deliberate decision (see [docs/PRIVATE-DEMO.md](docs/PRIVATE-DEMO.md)).
 
-> Don't enter customer, employee-personal, or financial details. The app says this in the UI too.
+> Use synthetic data until Ekiben approves real use. Nightly reports hold sales figures: see the note in [docs/tracker-brief.md](docs/tracker-brief.md) before entering real ones.
 
 ## Stack (and why)
 
@@ -88,7 +88,7 @@ docs/                 ACCESS.md, ADMIN.md, PRIVATE-DEMO.md
 
 ## What is tested
 
-`npm test` runs 151 checks in 13 files against a real throwaway Postgres, as the same restricted role the app uses:
+`npm test` runs 174 checks in 16 files against a real throwaway Postgres, as the same restricted role the app uses:
 - [tests/access.test.ts](tests/access.test.ts) — who can see/change what (members, assignees, admins, disabled users, no-user), role cannot be self-assigned, history is written with every change and cannot be edited, failed changes leave no history.
 - [tests/auth.test.ts](tests/auth.test.ts) — login codes (one-time, expiry, attempt lock, throttle), domain enforcement, admin allowlist, disabled users, session end.
 - [tests/summary.test.ts](tests/summary.test.ts), [tests/time.test.ts](tests/time.test.ts) — start-of-week vs now reconstruction, deadline flags, Monday boundary, both daylight-saving transitions.

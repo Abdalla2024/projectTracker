@@ -18,6 +18,11 @@ export function describeEvent(e: { event_type: string; field: string | null; old
     case "commented": return "added a comment";
     case "comment_edited": return "edited a comment";
     case "comment_deleted": return "deleted a comment";
+    case "task_added": return `added the task "${e.new_value ?? ""}"`;
+    case "task_completed": return `completed the task "${e.new_value ?? ""}"`;
+    case "task_reopened": return `reopened the task "${e.new_value ?? ""}"`;
+    case "task_deleted": return `deleted the task "${e.old_value ?? ""}"`;
+    case "task_assigned": return e.new_value ? `assigned the task "${e.old_value ?? ""}" to ${e.new_value}` : `unassigned the task "${e.old_value ?? ""}"`;
     case "assignee_added": return `assigned ${e.new_value ?? "someone"}`;
     case "assignee_removed": return `unassigned ${e.old_value ?? "someone"}`;
     case "updated": {

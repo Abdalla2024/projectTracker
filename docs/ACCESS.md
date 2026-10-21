@@ -6,28 +6,32 @@
 - **Role** (`member` or `admin`) is stored server-side in `profiles.role`. It is set by a database trigger from the `admin_emails` allowlist and nothing else. The web app's database role has **no** INSERT/UPDATE privilege on `profiles`, so there is no request that can change a role. Every role change is logged in `role_changes`.
 - Every new account is a `member` unless its (verified) email is on the allowlist.
 
-## Permission matrix
+## Permission matrix (shared workspace, migration 008)
 
 | Action | Visitor | Member | Admin |
 |---|---|---|---|
 | See sign-in pages | ✅ | ✅ | ✅ |
-| Request a code / sign up | Only for an allowed domain, no `+` alias | — | — |
-| See any project, comment, history | ❌ | Projects they created, or an admin assigned to them | All |
-| Create a project | ❌ | ✅ (creator = self) | ✅ |
-| Edit all fields | ❌ | Own created projects | Any |
-| Update status + next step | ❌ | Projects assigned to them | Any |
-| Assign / reassign (one or many) | ❌ | ❌ | ✅ |
-| Archive / restore | ❌ | Own created projects | Any |
-| Comment | ❌ | On projects they can see | On any |
-| Delete anything | ❌ | ❌ | ❌ (archive/cancel instead) |
-| Weekly summary | ❌ | Only projects they can see | All |
+| Sign up | Allowed domain, or an exact address in `ALLOWED_EMAILS`; no `+` alias | — | — |
+| See every project, task, comment, history | ❌ | ✅ | ✅ |
+| Create a project, edit any project's details | ❌ | ✅ (creator = self) | ✅ |
+| Assign / unassign people (projects and tasks) | ❌ | ✅ | ✅ |
+| Add, edit, complete, delete tasks and sections | ❌ | ✅ | ✅ |
+| Archive / restore a project | ❌ | Projects they created | Any |
+| Comment and reply | ❌ | ✅ (as themselves) | ✅ |
+| Edit or delete a comment | ❌ | Their own only | Their own only |
+| Delete a project or history | ❌ | ❌ | ❌ (archive/cancel instead) |
+| Create, rename, recolour, archive locations and teams | ❌ | ❌ | ✅ |
+| Submit a nightly report | ❌ | ✅ (as themselves) | ✅ |
+| See and correct nightly reports | ❌ | The ones they submitted | All |
+| Dashboard (sales charts) and Settings | ❌ | ❌ | ✅ |
+| Weekly summary | ❌ | All projects (no store snapshot) | All projects + store snapshot |
 | Change roles / disable accounts | ❌ | ❌ | ❌ in the app (owner scripts only) |
 
-Edit and assignment rules are **recommended defaults** to validate with Ekiben.
+Disabled accounts see and change nothing. **Defaults to confirm with Ekiben:** that every staff member may edit every project (as in Asana), and that only admins see sales.
 
 ## Where each rule is enforced
 
-1. **Database (authoritative)** — [db/migrations/002_security.sql](../db/migrations/002_security.sql) (plus 003, which removes the retired store feature): row-level security policies decide which rows each user can read or write; triggers decide which *columns* an assignee may change, require admin for assignment, stamp creator/assigner, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE; comments can be changed only by their author, through migration 007).
+1. **Database (authoritative)** — [db/migrations](../db/migrations) (002 for the base rules, 008 for the shared workspace, 009 for nightly reports): row-level security policies decide which rows each user can read or write; triggers restrict archiving to the creator or an admin, keep tasks inside their project, stamp creators, assigners, completers and editors, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE; comments can be changed only by their author, through migration 007).
 2. **Server code** — server actions re-check the signed-in user and limit what each form may send.
 3. **Interface** — hides controls the user can't use. This is convenience only.
 
