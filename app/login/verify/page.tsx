@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requestCodeAction, verifyCodeAction } from "@/app/actions";
 import { Alerts } from "@/app/components/Alerts";
+import { Logo } from "@/app/components/Logo";
 import { getSessionUser } from "@/lib/auth";
 import { emailTransport } from "@/lib/config";
 
@@ -11,6 +12,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   const devConsole = emailTransport() === "console";
   return (
     <main className="login">
+      <span className="mark"><Logo /></span>
       <div className="card">
         <h1>Check your email</h1>
         <p className="muted">We sent a 6-digit code to <b>{email}</b>. It expires in 10 minutes.</p>

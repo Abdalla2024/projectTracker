@@ -12,7 +12,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <h1 style={{ marginTop: 20 }}>New project</h1>
+      <div className="page-head"><h1>New project</h1></div>
       <Alerts error={error} />
       <form action={createProjectAction} className="card">
         <label htmlFor="name">Name</label>

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { signOutAction } from "@/app/actions";
+import { Logo } from "@/app/components/Logo";
+import { NavLinks } from "@/app/components/NavLinks";
 import { requireUser } from "@/lib/auth";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -8,14 +10,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <>
       <header className="top">
         <div className="wrap">
-          <Link className="brand" href="/">Ekiben Project Tracker</Link>
-          <nav>
-            <Link href="/">Projects</Link>
-            <Link href="/projects/new">New project</Link>
-            <Link href="/summary">Weekly summary</Link>
-          </nav>
+          <Link className="brand" href="/" aria-label="Ekiben Project Tracker home"><Logo /></Link>
+          <NavLinks />
           <div className="who">
-            <span>{user.displayName}</span>
+            <span className="name">{user.displayName}</span>
             <span className={`chip ${user.role === "admin" ? "warn" : ""}`}>{user.role}</span>
             <form action={signOutAction}><button className="link" type="submit">Sign out</button></form>
           </div>

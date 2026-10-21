@@ -36,7 +36,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <h1 style={{ marginTop: 20 }}>Weekly summary</h1>
+      <div className="page-head"><h1>Weekly summary</h1></div>
       <p className="muted">
         {win.label} · compares each project at Monday 12:00 AM ({zone}) with {win.isCurrent ? `now (${formatDateTime(win.end, zone)})` : "the end of that week"}.{" "}
         {user.role === "admin" ? "Showing all projects." : "Showing only projects you can access."}
@@ -47,7 +47,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
         <Link href={`/summary?weeks=${weeksAgo + 1}`}>Previous week →</Link>
       </p>
 
-      <div className="stats" style={{ margin: "12px 0" }}>
+      <div className="stats">
         <div className="stat"><b>{t.activeAtEnd}</b>active projects</div>
         <div className="stat"><b>{t.created}</b>created</div>
         <div className="stat"><b>{t.completed}</b>completed</div>
@@ -68,7 +68,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
                 {p.completed ? <> <span className="chip ok">completed</span></> : null}
                 {p.deadlineFlag === "missed" ? <> <span className="chip bad">deadline missed ({d(p.deadline)})</span></> : null}
                 {p.deadlineFlag === "approaching" ? <> <span className="chip warn">due {d(p.deadline)}</span></> : null}
-                {lines(p).length ? <ul style={{ margin: "4px 0 0", paddingLeft: 20 }} className="muted">{lines(p).map((l) => <li key={l}>{l}</li>)}</ul> : null}
+                {lines(p).length ? <ul className="muted tight">{lines(p).map((l) => <li key={l}>{l}</li>)}</ul> : null}
               </li>
             ))}
           </ul>

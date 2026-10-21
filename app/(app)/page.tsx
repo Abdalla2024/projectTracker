@@ -15,7 +15,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <div className="row" style={{ marginTop: 20 }}>
+      <div className="page-head">
         <div>
           <h1>{user.role === "admin" ? "All projects" : "My projects"}</h1>
           <p className="muted">
@@ -27,9 +27,9 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
         <Link className="btn" href="/projects/new">New project</Link>
       </div>
       <Alerts error={sp.error} />
-      <div className="card table-scroll">
+      <div className="card table-card table-scroll">
         {projects.length === 0 ? (
-          <p className="muted">No projects yet. Create one to get started.</p>
+          <p className="empty">No projects yet. Create one to get started.</p>
         ) : (
           <table className="stack">
             <thead>
@@ -42,7 +42,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
                 return (
                   <tr key={p.id}>
                     <td>
-                      <Link href={`/projects/${p.id}`}>{p.name}</Link>
+                      <Link className="title" href={`/projects/${p.id}`}>{p.name}</Link>
                       {p.archived_at ? <> <span className="chip">archived</span></> : null}
                       {p.next_step ? <div className="hint">Next: {p.next_step}</div> : null}
                     </td>

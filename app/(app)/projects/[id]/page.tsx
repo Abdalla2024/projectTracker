@@ -31,8 +31,8 @@ export default async function ProjectPage({
 
   return (
     <>
-      <p style={{ marginTop: 16 }}><Link href="/">← All projects</Link></p>
-      <div className="row">
+      <Link className="back" href="/">← All projects</Link>
+      <div className="page-head">
         <div>
           <h1>{project.name}</h1>
           <p>
@@ -53,13 +53,13 @@ export default async function ProjectPage({
 
       <section className="card">
         <h2>Details</h2>
-        <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "max-content 1fr", gap: "6px 16px" }}>
-          <dt className="muted">Created by</dt><dd style={{ margin: 0 }}>{project.creator_name}, {formatDateTime(project.created_at, zone)}</dd>
-          <dt className="muted">Assigned to</dt>
-          <dd style={{ margin: 0 }}>{project.assignees.length ? project.assignees.map((a) => a.name).join(", ") : "Unassigned"}</dd>
-          <dt className="muted">Deadline</dt><dd style={{ margin: 0 }}>{project.deadline ? formatDate(project.deadline) : "None"}</dd>
-          <dt className="muted">Next step</dt><dd style={{ margin: 0 }}>{project.next_step || "—"}</dd>
-          <dt className="muted">Last updated</dt><dd style={{ margin: 0 }}>{formatDateTime(project.updated_at, zone)}</dd>
+        <dl className="details">
+          <dt>Created by</dt><dd>{project.creator_name}, {formatDateTime(project.created_at, zone)}</dd>
+          <dt>Assigned to</dt>
+          <dd>{project.assignees.length ? project.assignees.map((a) => a.name).join(", ") : "Unassigned"}</dd>
+          <dt>Deadline</dt><dd>{project.deadline ? formatDate(project.deadline) : "None"}</dd>
+          <dt>Next step</dt><dd>{project.next_step || "—"}</dd>
+          <dt>Last updated</dt><dd>{formatDateTime(project.updated_at, zone)}</dd>
         </dl>
         {project.description ? <p style={{ whiteSpace: "pre-wrap" }}>{project.description}</p> : null}
       </section>

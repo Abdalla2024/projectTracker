@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requestCodeAction } from "@/app/actions";
 import { Alerts } from "@/app/components/Alerts";
+import { Logo } from "@/app/components/Logo";
 import { getSessionUser } from "@/lib/auth";
 import { allowedDomains } from "@/lib/config";
 
@@ -10,9 +11,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const domains = allowedDomains();
   return (
     <main className="login">
+      <span className="mark"><Logo /></span>
       <div className="card">
-        <h1>Ekiben Project Tracker</h1>
-        <p className="muted">Sign in with your Ekiben email address. We&apos;ll email you a 6-digit code.</p>
+        <h1>Sign in</h1>
+        <p className="muted">Use your Ekiben email address. We&apos;ll email you a 6-digit code.</p>
         <Alerts error={error} />
         <form action={requestCodeAction}>
           <label htmlFor="email">Work email</label>
