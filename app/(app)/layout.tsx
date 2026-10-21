@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <>
       <header className="top">
         <div className="wrap">
-          <Link className="brand" href="/" aria-label="Ekiben Project Tracker home"><Logo /></Link>
+          <Link className="brand" href="/" aria-label="Ekiben Project Tracker home"><Logo size={38} /><span className="brand-text">Project Tracker</span></Link>
           <NavLinks />
           <div className="who">
             <span className="name">{user.displayName}</span>

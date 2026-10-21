@@ -15,7 +15,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   const devConsole = emailTransport() === "console";
   return (
     <main className="login">
-      <span className="mark"><Logo /></span>
+      <span className="mark"><Logo size={84} /></span>
       <div className="card">
         <h1>{reset ? "Choose a new password" : "Finish creating your account"}</h1>
         <p className="muted">We sent a 6-digit code to <b>{email}</b>. It expires in 10 minutes.</p>

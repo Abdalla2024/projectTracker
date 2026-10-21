@@ -14,7 +14,7 @@ Project context, requirements, decisions, open questions, and what is unverified
 |---|---|---|
 | App | Next.js (App Router) + TypeScript | One codebase for UI and server; widely known |
 | Database | PostgreSQL, plain SQL migrations in [db/migrations](db/migrations) | Access rules live in the database (row-level security + triggers), and run on any Postgres |
-| Auth | Passwordless email code, implemented in SQL functions + [lib/auth.ts](lib/auth.ts) | No passwords to store; proves control of an Ekiben mailbox; no vendor chosen yet |
+| Auth | Sign-up proves the email with a one-time code and sets a password; later sign-ins use email + password (scrypt hashes in a table the app role cannot read; 5 wrong attempts lock an account for 15 minutes; forgotten passwords are reset with a new code). SQL functions + [lib/auth.ts](lib/auth.ts) | Proves control of an Ekiben mailbox once, then no code each time; no vendor chosen yet |
 | Email | SMTP via nodemailer (any provider) | Provider not decided; `console` mode for local dev only |
 
 Supabase (the earlier suggestion) was not used for the demo because its local stack needs Docker, which isn't installed here, and its hosted version needs an account. The SQL is portable to a managed Postgres later.
@@ -33,7 +33,7 @@ npm run dev                         # http://localhost:3000
 
 **Upgrading an older local database** (from before store selection was removed): `npm run db:setup` applies migration 003, which drops the store tables and links but keeps existing history rows; then `npm run db:seed-demo -- --reset` refreshes the demo data.
 
-**Signing in locally:** with `EMAIL_TRANSPORT=console` no email is sent. Enter an email, then read the 6-digit code from the terminal running `npm run dev`. To sign in as the synthetic demo users, add `ekiben-demo.example` to `ALLOWED_EMAIL_DOMAINS` **in your local `.env.local` only**:
+**Signing in locally:** with `EMAIL_TRANSPORT=console` no email is sent. Use **Create an account**, enter an email, then read the 6-digit code from the terminal running `npm run dev` and choose a password (10+ characters). After that, sign in with email and password. To sign in as the synthetic demo users, add `ekiben-demo.example` to `ALLOWED_EMAIL_DOMAINS` **in your local `.env.local` only**:
 
 | Account | Role |
 |---|---|
@@ -87,7 +87,7 @@ docs/                 ACCESS.md, ADMIN.md, PRIVATE-DEMO.md
 
 ## What is tested
 
-`npm test` runs 102 checks in 10 files against a real throwaway Postgres, as the same restricted role the app uses:
+`npm test` runs 112 checks in 11 files against a real throwaway Postgres, as the same restricted role the app uses:
 - [tests/access.test.ts](tests/access.test.ts) — who can see/change what (members, assignees, admins, disabled users, no-user), role cannot be self-assigned, history is written with every change and cannot be edited, failed changes leave no history.
 - [tests/auth.test.ts](tests/auth.test.ts) — login codes (one-time, expiry, attempt lock, throttle), domain enforcement, admin allowlist, disabled users, session end.
 - [tests/summary.test.ts](tests/summary.test.ts), [tests/time.test.ts](tests/time.test.ts) — start-of-week vs now reconstruction, deadline flags, Monday boundary, both daylight-saving transitions.

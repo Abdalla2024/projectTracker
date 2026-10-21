@@ -1,63 +1,72 @@
 import Link from "next/link";
 import { Alerts } from "@/app/components/Alerts";
-import { PRIORITY_LABELS, STATUS_LABELS } from "@/lib/constants";
+import { NewProjectModal } from "@/app/components/NewProjectModal";
+import { StatusRing } from "@/app/components/StatusRing";
+import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
-import { listProjects } from "@/lib/projects";
+import { listPeople, listProjects } from "@/lib/projects";
 import { formatDate, formatDateTime, localDateString, timeZone } from "@/lib/time";
 
-export default async function ProjectsPage({ searchParams }: { searchParams: Promise<{ archived?: string; error?: string }> }) {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ archived?: string; error?: string; new?: string }>;
+}) {
   const user = await requireUser();
   const sp = await searchParams;
   const showArchived = sp.archived === "1";
+  const isAdmin = user.role === "admin";
   const projects = await listProjects(user.id, showArchived);
+  const people = isAdmin ? await listPeople(user.id) : [];
   const zone = timeZone();
   const today = localDateString(new Date(), zone);
+  const modalOpen = sp.new === "1";
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>{user.role === "admin" ? "All projects" : "My projects"}</h1>
+          <h1>{isAdmin ? "All projects" : "My projects"}</h1>
           <p className="muted">
-            {user.role === "admin"
-              ? "As an admin you can see every project."
-              : "Projects you created, plus projects an admin assigned to you."}
+            {isAdmin ? "As an admin you can see every project." : "Projects you created, plus projects an admin assigned to you."}
           </p>
         </div>
-        <Link className="btn" href="/projects/new">New project</Link>
+        <NewProjectModal
+          people={people.map((p) => ({ id: p.id, name: p.name }))}
+          isAdmin={isAdmin}
+          statuses={STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+          priorities={PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] }))}
+          defaultOpen={modalOpen}
+          error={modalOpen ? sp.error : undefined}
+        />
       </div>
-      <Alerts error={sp.error} />
-      <div className="card table-card table-scroll">
-        {projects.length === 0 ? (
-          <p className="empty">No projects yet. Create one to get started.</p>
-        ) : (
-          <table className="stack">
-            <thead>
-              <tr><th>Project</th><th>Status</th><th>Priority</th><th>Deadline</th><th>Assigned to</th><th>Updated</th></tr>
-            </thead>
-            <tbody>
-              {projects.map((p) => {
-                const open = !["done", "cancelled"].includes(p.status) && !p.archived_at;
-                const overdue = open && p.deadline && p.deadline < today;
-                return (
-                  <tr key={p.id}>
-                    <td>
-                      <Link className="title" href={`/projects/${p.id}`}>{p.name}</Link>
-                      {p.archived_at ? <> <span className="chip">archived</span></> : null}
-                      {p.next_step ? <div className="hint">Next: {p.next_step}</div> : null}
-                    </td>
-                    <td data-label="Status"><span className={`chip ${p.status}`}>{STATUS_LABELS[p.status]}</span></td>
-                    <td data-label="Priority"><span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]}</span></td>
-                    <td data-label="Deadline">{p.deadline ? formatDate(p.deadline) : "—"}{overdue ? <> <span className="chip bad">overdue</span></> : null}</td>
-                    <td data-label="Assigned to">{p.assignees.length ? p.assignees.join(", ") : <span className="muted">unassigned</span>}</td>
-                    <td className="muted" data-label="Updated">{formatDateTime(p.updated_at, zone)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {!modalOpen ? <Alerts error={sp.error} /> : null}
+
+      {projects.length === 0 ? (
+        <div className="card empty">No projects yet. Create one to get started.</div>
+      ) : (
+        <div className="project-grid">
+          {projects.map((p) => {
+            const open = !["done", "cancelled"].includes(p.status) && !p.archived_at;
+            const overdue = open && p.deadline && p.deadline < today;
+            return (
+              <article className="card project-card" key={p.id}>
+                <StatusRing status={p.status} />
+                <div className="project-body">
+                  <Link className="title" href={`/projects/${p.id}`}>{p.name}</Link>
+                  {p.next_step ? <div className="hint">Next: {p.next_step}</div> : null}
+                  <div className="tags">
+                    <span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]}</span>
+                    {p.archived_at ? <span className="chip">archived</span> : null}
+                    {p.deadline ? <span className={`chip ${overdue ? "bad" : ""}`}>{overdue ? "Overdue · " : "Due "}{formatDate(p.deadline)}</span> : null}
+                  </div>
+                  <div className="hint">Updated {formatDateTime(p.updated_at, zone)}</div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
       <p className="hint">
         {showArchived ? <Link href="/">Hide archived</Link> : <Link href="/?archived=1">Show archived</Link>}
         {" · "}Times shown in {zone}.

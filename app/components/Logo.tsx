@@ -1,4 +1,6 @@
-// Text wordmark. Swap for the official Ekiben logo file once it is provided.
-export function Logo() {
-  return <span className="logo">Ekiben</span>;
+import Image from "next/image";
+
+/** Ekiben badge (public/ekiben-logo.png). */
+export function Logo({ size = 40 }: { size?: number }) {
+  return <Image src="/ekiben-logo.png" alt="Ekiben" width={size} height={size} priority />;
 }

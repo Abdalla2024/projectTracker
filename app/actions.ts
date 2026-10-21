@@ -85,10 +85,10 @@ export async function createProjectAction(formData: FormData) {
       name: str(formData, "name"), description: str(formData, "description"), priority: str(formData, "priority"),
       deadline: str(formData, "deadline"), next_step: str(formData, "next_step"), status: str(formData, "status"),
     });
-  if (!parsed.success) redirect(`/projects/new?error=${enc(parsed.error.issues[0].message)}`);
+  if (!parsed.success) redirect(`/?new=1&error=${enc(parsed.error.issues[0].message)}`);
 
   let id = "";
-  await attempt("/projects/new", async () => {
+  await attempt("/?new=1", async () => {
     id = await createProject(user, {
       ...parsed.data, assigneeIds: ids(formData, "assignees"),
     });

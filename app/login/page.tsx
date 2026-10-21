@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const domains = allowedDomains();
   return (
     <main className="login">
-      <span className="mark"><Logo /></span>
+      <span className="mark"><Logo size={84} /></span>
       <div className="card">
         <h1>Sign in</h1>
         <p className="muted">Welcome back. Use your email and password.</p>

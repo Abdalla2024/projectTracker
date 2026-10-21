@@ -28,7 +28,7 @@ Supabase's custom SMTP setting configures emails sent by **Supabase Auth** (its 
 
 **A. Database (from your machine)**
 ```bash
-npm run db:setup:remote     # creates the restricted tracker_app role, applies migrations 001-005, then checks the result
+npm run db:setup:remote     # creates the restricted tracker_app role, applies migrations 001-006, then checks the result
 ```
 It fails loudly if the app role would be privileged, or if any Supabase API role (`anon`, `authenticated`, `service_role`) can still reach our tables or functions. It is safe to re-run: it applies only what is missing and repeats the checks. To verify by hand:
 ```sql

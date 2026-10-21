@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { archiveAction, assignAction, commentAction, updateProjectAction } from "@/app/actions";
 import { Alerts } from "@/app/components/Alerts";
+import { StatusRing } from "@/app/components/StatusRing";
 import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 import { describeEvent } from "@/lib/format";
@@ -33,13 +34,15 @@ export default async function ProjectPage({
     <>
       <Link className="back" href="/">← All projects</Link>
       <div className="page-head">
-        <div>
-          <h1>{project.name}</h1>
-          <p>
-            <span className={`chip ${project.status}`}>{STATUS_LABELS[project.status]}</span>{" "}
-            <span className={`chip ${project.priority}`}>{PRIORITY_LABELS[project.priority]} priority</span>
-            {project.archived_at ? <> <span className="chip">archived</span></> : null}
-          </p>
+        <div className="title-block">
+          <StatusRing status={project.status} size={84} />
+          <div>
+            <h1>{project.name}</h1>
+            <p>
+              <span className={`chip ${project.priority}`}>{PRIORITY_LABELS[project.priority]} priority</span>
+              {project.archived_at ? <> <span className="chip">archived</span></> : null}
+            </p>
+          </div>
         </div>
         {fullEdit ? (
           <form action={archiveAction}>
@@ -55,8 +58,7 @@ export default async function ProjectPage({
         <h2>Details</h2>
         <dl className="details">
           <dt>Created by</dt><dd>{project.creator_name}, {formatDateTime(project.created_at, zone)}</dd>
-          <dt>Assigned to</dt>
-          <dd>{project.assignees.length ? project.assignees.map((a) => a.name).join(", ") : "Unassigned"}</dd>
+          {project.assignees.length ? <><dt>Assigned to</dt><dd>{project.assignees.map((a) => a.name).join(", ")}</dd></> : null}
           <dt>Deadline</dt><dd>{project.deadline ? formatDate(project.deadline) : "None"}</dd>
           <dt>Next step</dt><dd>{project.next_step || "—"}</dd>
           <dt>Last updated</dt><dd>{formatDateTime(project.updated_at, zone)}</dd>

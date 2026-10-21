@@ -13,7 +13,7 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
   const domains = allowedDomains();
   return (
     <main className="login">
-      <span className="mark"><Logo /></span>
+      <span className="mark"><Logo size={84} /></span>
       <div className="card">
         <h1>{reset ? "Reset your password" : "Create your account"}</h1>
         <p className="muted">Enter your work email. We&apos;ll email you a 6-digit code to confirm it&apos;s you, then you choose a password.</p>
