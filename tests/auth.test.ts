@@ -3,7 +3,7 @@ import { asUser, closePools, owner, app, resetDatabase } from "./helpers/db";
 
 const DOMAINS = ["tracker.test"];
 const login = (email: string, code = "hash-ok", session = `s-${Math.random()}`) =>
-  app.query("select auth_verify_and_login($1,$2,$3,$4,3600) as id", [email, code, DOMAINS, session]).then((r) => r.rows[0].id as string | null);
+  app.query("select auth_set_password($1,$2,$3,$4,3600,'{}','salt-x','hash-x') as id", [email, code, DOMAINS, session]).then((r) => r.rows[0].id as string | null);
 const request = (email: string, hash = "hash-ok") =>
   app.query("select auth_request_login_code($1,$2,600) as s", [email, hash]).then((r) => r.rows[0].s as string);
 // Make earlier codes old enough to get past the 30-second throttle.
@@ -89,7 +89,7 @@ describe("exact-email exception at the database (same function as the domain che
   // Synthetic: mail.example is not an allowed domain here (DOMAINS = tracker.test).
   const EXACT = ["dev.person@mail.example"];
   const loginWith = (email: string, emails: string[], session = `s-${Math.random()}`) =>
-    app.query("select auth_verify_and_login($1,$2,$3,$4,3600,$5) as id", [email, "hash-ok", DOMAINS, session, emails]).then((r) => r.rows[0].id as string | null);
+    app.query("select auth_set_password($1,$2,$3,$4,3600,$5,'salt-x','hash-x') as id", [email, "hash-ok", DOMAINS, session, emails]).then((r) => r.rows[0].id as string | null);
 
   it("signs in exactly that address (any case / padding) and creates a MEMBER", async () => {
     await age();
@@ -138,7 +138,7 @@ describe("exact-email exception at the database (same function as the domain che
     await age();
     await request("dev.person@mail.example");
     for (let i = 0; i < 5; i++) {
-      const r = await app.query("select auth_verify_and_login($1,$2,$3,$4,3600,$5) as id", ["dev.person@mail.example", "wrong", DOMAINS, `s-${i}`, EXACT]);
+      const r = await app.query("select auth_set_password($1,$2,$3,$4,3600,$5,'salt-x','hash-x') as id", ["dev.person@mail.example", "wrong", DOMAINS, `s-${i}`, EXACT]);
       expect(r.rows[0].id).toBeNull();
     }
     expect(await loginWith("dev.person@mail.example", EXACT)).toBeNull();
@@ -151,3 +151,67 @@ describe("exact-email exception at the database (same function as the domain che
   });
 });
 
+
+describe("password sign-in (migration 006)", () => {
+  const D = ["tracker.test"];
+  const email = "pw.person@tracker.test";
+  const setPw = (e: string, hash: string, session = `s-${Math.random()}`) =>
+    app.query("select auth_set_password($1,'hash-ok',$2,$3,3600,'{}','salt-1',$4) as id", [e, D, session, hash]).then((r) => r.rows[0].id as string | null);
+  const pwLogin = (e: string, hash: string, session = `s-${Math.random()}`, domains = D) =>
+    app.query("select auth_password_login($1,$2,$3,$4,3600,'{}') as id", [e, hash, domains, session]).then((r) => r.rows[0].id as string | null);
+  const salt = (e: string) => app.query("select auth_password_salt($1) as s", [e]).then((r) => r.rows[0].s as string | null);
+
+  it("sign-up with a valid code sets the password; sign-in then needs no code", async () => {
+    await age(); await request(email);
+    const id = await setPw(email, "hash-1");
+    expect(id).toBeTruthy();
+    expect(await salt(email)).toBe("salt-1");
+    expect(await pwLogin(email, "hash-1")).toBe(id);
+    expect(await pwLogin(email.toUpperCase(), "hash-1")).toBe(id);
+  });
+
+  it("a wrong password, an unknown address and a bad address all fail the same way", async () => {
+    expect(await pwLogin(email, "hash-wrong")).toBeNull();
+    expect(await pwLogin("nobody@tracker.test", "hash-1")).toBeNull();
+    expect(await pwLogin("pw.person+x@tracker.test", "hash-1")).toBeNull();
+    expect(await salt("nobody@tracker.test")).toBeNull();
+  });
+
+  it("5 wrong passwords in a row lock the account, even for the right password, until the lock ends", async () => {
+    for (let i = 0; i < 5; i++) expect(await pwLogin(email, `bad-${i}`)).toBeNull();
+    expect(await pwLogin(email, "hash-1")).toBeNull();
+    await owner.query("update credentials set locked_until = now() - interval '1 second'");
+    expect(await pwLogin(email, "hash-1")).toBeTruthy();
+  });
+
+  it("sign-up needs a valid code: no code, wrong code and a disallowed domain all fail", async () => {
+    expect(await setPw("pw.new@tracker.test", "h")).toBeNull();
+    await age(); await request("pw.new@tracker.test");
+    const wrong = await app.query("select auth_set_password($1,'wrong',$2,'s-x',3600,'{}','s','h') as id", ["pw.new@tracker.test", D]);
+    expect(wrong.rows[0].id).toBeNull();
+    await age(); await request("pw.new@elsewhere.test");
+    expect(await setPw("pw.new@elsewhere.test", "h")).toBeNull();
+    expect((await owner.query("select count(*)::int n from profiles where email like 'pw.new@%'")).rows[0].n).toBe(0);
+  });
+
+  it("a password reset (new code) replaces the password and clears a lock; the old one stops working", async () => {
+    await age(); await request(email);
+    expect(await app.query("select auth_set_password($1,'hash-ok',$2,'s-r',3600,'{}','salt-2','hash-2') as id", [email, D]).then((r) => r.rows[0].id)).toBeTruthy();
+    expect(await pwLogin(email, "hash-1")).toBeNull();
+    expect(await pwLogin(email, "hash-2")).toBeTruthy();
+  });
+
+  it("a disabled account cannot sign in with its password; removing the domain also blocks it", async () => {
+    expect(await pwLogin(email, "hash-2", undefined, ["other.test"])).toBeNull();
+    await owner.query("update profiles set disabled = true where email = $1", [email]);
+    expect(await pwLogin(email, "hash-2")).toBeNull();
+    await owner.query("update profiles set disabled = false where email = $1", [email]);
+  });
+
+  it("new accounts are members, and the runtime role cannot read or write credentials", async () => {
+    expect((await owner.query("select role from profiles where email = $1", [email])).rows[0].role).toBe("member");
+    await expect(app.query("select * from credentials")).rejects.toThrow(/permission denied/);
+    await expect(app.query("update credentials set hash = 'x'")).rejects.toThrow(/permission denied/);
+    await expect(app.query("insert into credentials (user_id, salt, hash) select id, 's', 'h' from profiles limit 1")).rejects.toThrow(/permission denied/);
+  });
+});

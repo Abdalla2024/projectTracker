@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requestLoginCode, requireUser, signOut, verifyLoginCode } from "@/lib/auth";
+import { requestLoginCode, requireUser, signInWithPassword, signOut, signUpWithCode } from "@/lib/auth";
 import { PRIORITIES, STATUSES } from "@/lib/constants";
 import {
   NotAllowedError, addComment, createProject, getProjectDetail, isUuid, setArchived, setAssignees, updateProject,
@@ -34,16 +34,29 @@ async function attempt(back: string, fn: () => Promise<void>): Promise<void> {
 
 // ---- sign in ---------------------------------------------------------------------------------
 
+/** Step 1 of sign-up / password reset: email a one-time code. */
 export async function requestCodeAction(formData: FormData) {
+  const mode = str(formData, "mode") === "reset" ? "reset" : "signup";
   const res = await requestLoginCode(str(formData, "email"));
-  if (!res.ok) redirect(`/login?error=${enc(res.error)}`);
-  redirect(`/login/verify?email=${enc(res.email)}`);
+  if (!res.ok) redirect(`/signup?mode=${mode}&error=${enc(res.error)}`);
+  redirect(`/signup/verify?email=${enc(res.email)}&mode=${mode}`);
 }
 
-export async function verifyCodeAction(formData: FormData) {
+/** Step 2: the code proves the address; the password is set and the user is signed in. */
+export async function completeSignupAction(formData: FormData) {
   const email = str(formData, "email");
-  if (!(await verifyLoginCode(email, str(formData, "code")))) {
-    redirect(`/login/verify?email=${enc(email)}&error=${enc("That code didn't work or has expired. Request a new one.")}`);
+  const mode = str(formData, "mode") === "reset" ? "reset" : "signup";
+  const back = (msg: string) => redirect(`/signup/verify?email=${enc(email)}&mode=${mode}&error=${enc(msg)}`);
+  const password = str(formData, "password");
+  if (password !== str(formData, "confirm")) back("The two passwords don't match.");
+  const res = await signUpWithCode(email, str(formData, "code"), password);
+  if (!res.ok) back(res.error);
+  redirect("/");
+}
+
+export async function signInAction(formData: FormData) {
+  if (!(await signInWithPassword(str(formData, "email"), str(formData, "password")))) {
+    redirect(`/login?error=${enc("Incorrect email or password. After 5 wrong attempts an account is locked for 15 minutes.")}`);
   }
   redirect("/");
 }

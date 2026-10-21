@@ -69,7 +69,7 @@ describe("provider API roles (anon, authenticated, service_role)", () => {
         role,
       ).rejects.toThrow(/permission denied for function/);
       await expect(
-        asApiRole(role, (q) => q("select auth_verify_and_login('victim@tracker.test', 'chosen-hash', array['tracker.test'], 'my-session', 3600)")),
+        asApiRole(role, (q) => q("select auth_set_password('victim@tracker.test', 'chosen-hash', array['tracker.test'], 'my-session', 3600, '{}', 's', 'h')")),
         role,
       ).rejects.toThrow(/permission denied for function/);
     }

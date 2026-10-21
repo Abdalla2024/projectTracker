@@ -131,3 +131,4 @@ ul.plain li:last-child { border-bottom: 0; padding-bottom: 0; }
   table.stack td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-size: .8rem; }
 }
 .card > .hint:last-child { margin-top: 16px; }
+.center { text-align: center; }
