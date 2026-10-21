@@ -110,3 +110,38 @@ describe("local-dev exact email exception (DEV_ALLOWED_EMAIL)", () => {
   });
 });
 
+
+describe("individual addresses allowed in any environment (ALLOWED_EMAILS)", () => {
+  it("is off when unset or blank", async () => {
+    const { allowedEmails } = await import("@/lib/config");
+    delete env.ALLOWED_EMAILS;
+    expect(allowedEmails()).toEqual([]);
+    env.ALLOWED_EMAILS = "  ";
+    expect(allowedEmails()).toEqual([]);
+  });
+
+  it("yields the exact addresses, lowercased and de-duplicated, including in production", async () => {
+    const { allowedEmails, exactAllowedEmails } = await import("@/lib/config");
+    env.NODE_ENV = "production";
+    delete env.DEV_ALLOWED_EMAIL;
+    env.ALLOWED_EMAILS = " Person.One@mail.example, person.two@mail.example ,person.one@mail.example";
+    expect(allowedEmails()).toEqual(["person.one@mail.example", "person.two@mail.example"]);
+    expect(exactAllowedEmails()).toEqual(["person.one@mail.example", "person.two@mail.example"]);
+  });
+
+  it("refuses values that would widen it: a domain, a wildcard, a plus alias", async () => {
+    const { allowedEmails } = await import("@/lib/config");
+    for (const bad of ["mail.example", "@mail.example", "*@mail.example", "a@mail.example, mail.example", "dev+tag@mail.example", "dev@localhost"]) {
+      env.ALLOWED_EMAILS = bad;
+      expect(() => allowedEmails(), bad).toThrow(/ALLOWED_EMAILS/);
+    }
+  });
+
+  it("does not turn on the local-only dev exception in production", async () => {
+    const { exactAllowedEmails } = await import("@/lib/config");
+    env.NODE_ENV = "production";
+    env.ALLOWED_EMAILS = "person.one@mail.example";
+    env.DEV_ALLOWED_EMAIL = "dev.person@mail.example";
+    expect(() => exactAllowedEmails()).toThrow(/local development only/);
+  });
+});

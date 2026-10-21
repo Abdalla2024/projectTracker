@@ -67,6 +67,7 @@ All settings are environment variables; kept in `.env.local` for local developme
 | `DATABASE_URL` | Restricted `tracker_app` role used by the web app. The app refuses to start queries on a superuser/owner connection |
 | `APP_DB_PASSWORD` | Password `db:setup` gives the `tracker_app` role |
 | `ALLOWED_EMAIL_DOMAINS` | Comma-separated. **`ekibenbaltimore.com` is a provisional value — confirm with Ekiben** |
+| `ALLOWED_EMAILS` | Optional, any environment. Comma-separated full addresses allowed to sign in in addition to the allowed domains (for one or two named people outside the domain). Not a domain or wildcard; plus aliases are rejected; they still verify with a code and are members unless on the admin allowlist |
 | `DEV_ALLOWED_EMAIL` | **Local development only.** One exact full email address allowed to sign in besides the allowed domains (set it in `.env.local` only). Not a domain or list; plus aliases still rejected; account is still a member; refused when `NODE_ENV=production` |
 | `DATABASE_CA_CERT` | PEM text of the database provider's CA certificate (a public certificate). Needed when the provider signs with its own CA (e.g. Supabase); keeps full TLS verification on. Scripts also accept `DATABASE_CA_CERT_FILE` (a path) |
 | `DATABASE_POOL_MAX` | Max database connections per server instance (default 10; use 3 on a serverless host) |

@@ -50,3 +50,14 @@ describe("checkEmail with a local-dev exact-address exception", () => {
   });
 });
 
+
+describe("one extra address next to an allowed domain", () => {
+  it("lets only that exact address in: not others on its domain, not aliases", () => {
+    const domains = ["tracker.test"];
+    const extra = ["person.one@mail.example"];
+    expect(checkEmail("Person.One@mail.example", domains, extra)).toEqual({ ok: true, email: "person.one@mail.example" });
+    expect(checkEmail("someone.else@mail.example", domains, extra).ok).toBe(false);
+    expect(checkEmail("person.one+x@mail.example", domains, extra).ok).toBe(false);
+    expect(checkEmail("new.person@tracker.test", domains, extra).ok).toBe(true);
+  });
+});

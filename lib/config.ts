@@ -35,6 +35,28 @@ export function emailTransport(): EmailTransport {
  * (env DEV_ALLOWED_EMAIL). It is never a domain and never a list, and it is refused in production
  * (loudly, like the console email transport) so it cannot be switched on there by accident.
  */
+/**
+ * Individual full addresses allowed in any environment, in addition to the allowed domains
+ * (ALLOWED_EMAILS, comma-separated). Each must be one complete address: no domain, wildcard or + alias.
+ * Everything else about signing in is unchanged (verified code, rate limits, member role).
+ */
+export function allowedEmails(): string[] {
+  const raw = process.env.ALLOWED_EMAILS?.trim();
+  if (!raw) return [];
+  const out = raw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  for (const e of out) {
+    if (!/^[a-z0-9._%-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(e)) {
+      throw new Error("ALLOWED_EMAILS must be a comma-separated list of full email addresses (no domains, wildcards or + aliases).");
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** Every exact address that may sign in outside the allowed domains. */
+export function exactAllowedEmails(): string[] {
+  return [...new Set([...allowedEmails(), ...devAllowedEmails()])];
+}
+
 export function devAllowedEmails(): string[] {
   const raw = process.env.DEV_ALLOWED_EMAIL?.trim();
   if (!raw) return [];

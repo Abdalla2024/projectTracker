@@ -4,7 +4,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  LOGIN_CODE_TTL_SECONDS, SESSION_COOKIE, SESSION_TTL_SECONDS, allowedDomains, authSecret, devAllowedEmails, isProduction,
+  LOGIN_CODE_TTL_SECONDS, SESSION_COOKIE, SESSION_TTL_SECONDS, allowedDomains, authSecret, exactAllowedEmails, isProduction,
 } from "./config";
 import { withoutUser } from "./db";
 import { checkEmail } from "./email-address";
@@ -24,7 +24,7 @@ const hashCode = (email: string, code: string) => createHmac("sha256", authSecre
 export type RequestCodeResult = { ok: true; email: string } | { ok: false; error: string };
 
 export async function requestLoginCode(emailInput: string): Promise<RequestCodeResult> {
-  const check = checkEmail(emailInput, allowedDomains(), devAllowedEmails());
+  const check = checkEmail(emailInput, allowedDomains(), exactAllowedEmails());
   if (!check.ok) return { ok: false, error: check.reason };
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -52,7 +52,7 @@ export type SignUpResult = { ok: true } | { ok: false; error: string };
 
 /** Sign up or reset a password: the emailed code proves control of the address, and the password is set in the same step. */
 export async function signUpWithCode(emailInput: string, codeInput: string, password: string): Promise<SignUpResult> {
-  const check = checkEmail(emailInput, allowedDomains(), devAllowedEmails());
+  const check = checkEmail(emailInput, allowedDomains(), exactAllowedEmails());
   const code = codeInput.replace(/\s/g, "");
   if (!check.ok || !/^\d{6}$/.test(code)) return { ok: false, error: "That code didn't work or has expired. Request a new one." };
   const weak = checkPassword(password, check.email);
@@ -62,7 +62,7 @@ export async function signUpWithCode(emailInput: string, codeInput: string, pass
   const salt = newSalt();
   const userId = await withoutUser(async (c) =>
     (await c.query("select auth_set_password($1, $2, $3, $4, $5, $6, $7, $8) as id", [
-      check.email, hashCode(check.email, code), allowedDomains(), sha256(token), SESSION_TTL_SECONDS, devAllowedEmails(),
+      check.email, hashCode(check.email, code), allowedDomains(), sha256(token), SESSION_TTL_SECONDS, exactAllowedEmails(),
       salt, await hashPassword(password, salt),
     ])).rows[0].id as string | null,
   );
@@ -73,7 +73,7 @@ export async function signUpWithCode(emailInput: string, codeInput: string, pass
 
 /** Email + password sign-in. Every failure looks the same to the caller. */
 export async function signInWithPassword(emailInput: string, password: string): Promise<boolean> {
-  const check = checkEmail(emailInput, allowedDomains(), devAllowedEmails());
+  const check = checkEmail(emailInput, allowedDomains(), exactAllowedEmails());
   if (!check.ok || password.length === 0 || password.length > PASSWORD_MAX) return false;
 
   const token = randomBytes(32).toString("base64url");
@@ -83,7 +83,7 @@ export async function signInWithPassword(emailInput: string, password: string): 
   const hash = await hashPassword(password, salt);
   const userId = await withoutUser(async (c) =>
     (await c.query("select auth_password_login($1, $2, $3, $4, $5, $6) as id", [
-      check.email, hash, allowedDomains(), sha256(token), SESSION_TTL_SECONDS, devAllowedEmails(),
+      check.email, hash, allowedDomains(), sha256(token), SESSION_TTL_SECONDS, exactAllowedEmails(),
     ])).rows[0].id as string | null,
   );
   if (!userId) return false;
