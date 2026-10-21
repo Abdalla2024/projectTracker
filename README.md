@@ -87,7 +87,7 @@ docs/                 ACCESS.md, ADMIN.md, PRIVATE-DEMO.md
 
 ## What is tested
 
-`npm test` runs 112 checks in 11 files against a real throwaway Postgres, as the same restricted role the app uses:
+`npm test` runs 127 checks in 12 files against a real throwaway Postgres, as the same restricted role the app uses:
 - [tests/access.test.ts](tests/access.test.ts) — who can see/change what (members, assignees, admins, disabled users, no-user), role cannot be self-assigned, history is written with every change and cannot be edited, failed changes leave no history.
 - [tests/auth.test.ts](tests/auth.test.ts) — login codes (one-time, expiry, attempt lock, throttle), domain enforcement, admin allowlist, disabled users, session end.
 - [tests/summary.test.ts](tests/summary.test.ts), [tests/time.test.ts](tests/time.test.ts) — start-of-week vs now reconstruction, deadline flags, Monday boundary, both daylight-saving transitions.
@@ -101,7 +101,7 @@ docs/                 ACCESS.md, ADMIN.md, PRIVATE-DEMO.md
 
 - No in-app screens for managing admins or users — those are scripts by design (see ADMIN.md).
 - A person appears in the assignee picker only after signing in once. Display names are derived from the email (`jane.doe@…` → "Jane Doe"); there is no profile editing yet.
-- Comments can't be edited or deleted; projects are archived/cancelled, never deleted.
+- Comments can be edited and deleted only by their author (never by anyone else, including admins). A deleted comment keeps a placeholder so replies stay attached, and its text is erased; edits and deletions are recorded in the history without the text. Replies go one level deep. Projects are archived/cancelled, never deleted.
 - The weekly summary is an in-app page only (no email/Slack). It is deterministic (no AI), and a person should review it before it is shared outside the app.
 - Login throttling is per email address; there is no per-IP limit and no multi-factor step. Sessions last 7 days.
 - No pagination or search yet; fine for dozens of projects, not thousands.

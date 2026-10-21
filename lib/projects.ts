@@ -13,6 +13,8 @@ export interface ProjectListItem {
   priority: string;
   deadline: string | null;
   next_step: string;
+  phase: string;
+  progress: number;
   archived_at: Date | null;
   updated_at: Date;
   created_by: string;
@@ -22,6 +24,17 @@ export interface ProjectListItem {
 
 export interface Person { id: string; name: string; email?: string }
 
+export interface CommentRow {
+  id: string;
+  author_id: string;
+  author_name: string;
+  body: string;
+  parent_id: string | null;
+  created_at: Date;
+  edited_at: Date | null;
+  deleted_at: Date | null;
+}
+
 export interface ProjectDetail {
   id: string;
   name: string;
@@ -30,13 +43,15 @@ export interface ProjectDetail {
   priority: string;
   deadline: string | null;
   next_step: string;
+  phase: string;
+  progress: number;
   archived_at: Date | null;
   created_at: Date;
   updated_at: Date;
   created_by: string;
   creator_name: string;
   assignees: Person[];
-  comments: { id: string; author_name: string; body: string; created_at: Date }[];
+  comments: CommentRow[];
   events: (EventRow & { actor_name: string })[];
 }
 
@@ -48,7 +63,7 @@ export class NotAllowedError extends Error {}
 export async function listProjects(userId: string, includeArchived: boolean): Promise<ProjectListItem[]> {
   return withUser(userId, async (c) => {
     const r = await c.query(
-      `select p.id, p.name, p.status, p.priority, p.deadline::text as deadline, p.next_step, p.archived_at,
+      `select p.id, p.name, p.status, p.priority, p.deadline::text as deadline, p.next_step, p.phase, p.progress, p.archived_at,
               p.updated_at, p.created_by, cr.display_name as creator_name,
               coalesce((select json_agg(pr.display_name order by pr.display_name)
                         from project_assignees a join profiles pr on pr.id = a.user_id
@@ -68,7 +83,7 @@ export async function getProjectDetail(userId: string, id: string): Promise<Proj
     const p = (
       await c.query(
         `select p.id, p.name, p.description, p.status, p.priority, p.deadline::text as deadline, p.next_step,
-                p.archived_at, p.created_at, p.updated_at, p.created_by, cr.display_name as creator_name
+                p.phase, p.progress, p.archived_at, p.created_at, p.updated_at, p.created_by, cr.display_name as creator_name
          from projects p join profiles cr on cr.id = p.created_by where p.id = $1`,
         [id],
       )
@@ -79,7 +94,7 @@ export async function getProjectDetail(userId: string, id: string): Promise<Proj
       `select pr.id, pr.display_name as name, pr.email from project_assignees a join profiles pr on pr.id = a.user_id
        where a.project_id = $1 order by pr.display_name`, [id]);
     const comments = await c.query(
-      `select c.id, pr.display_name as author_name, c.body, c.created_at from comments c
+      `select c.id, c.author_id, pr.display_name as author_name, c.body, c.parent_id, c.created_at, c.edited_at, c.deleted_at from comments c
        join profiles pr on pr.id = c.author_id where c.project_id = $1 order by c.created_at, c.id`, [id]);
     const events = await c.query(
       `select e.id, e.project_id, e.event_type, e.field, e.old_value, e.new_value, e.subject_id, e.occurred_at,
@@ -104,6 +119,8 @@ export interface NewProject {
   priority: string;
   deadline: string | null;
   next_step: string;
+  phase: string;
+  progress: number;
   /** Honored only for admins; the database refuses it otherwise. */
   assigneeIds: string[];
 }
@@ -111,9 +128,9 @@ export interface NewProject {
 export async function createProject(user: { id: string; role: string }, input: NewProject): Promise<string> {
   return withUser(user.id, async (c) => {
     const r = await c.query(
-      `insert into projects (name, description, status, priority, deadline, next_step, created_by)
-       values ($1,$2,$3,$4,$5,$6,$7) returning id`,
-      [input.name, input.description, input.status, input.priority, input.deadline, input.next_step, user.id],
+      `insert into projects (name, description, status, priority, deadline, next_step, phase, progress, created_by)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id`,
+      [input.name, input.description, input.status, input.priority, input.deadline, input.next_step, input.phase, input.progress, user.id],
     );
     const id: string = r.rows[0].id;
     if (user.role === "admin") {
@@ -123,8 +140,8 @@ export async function createProject(user: { id: string; role: string }, input: N
   });
 }
 
-const EDITABLE = ["name", "description", "status", "priority", "deadline", "next_step"] as const;
-export type ProjectPatch = Partial<Record<(typeof EDITABLE)[number], string | null>>;
+const EDITABLE = ["name", "description", "status", "priority", "deadline", "next_step", "phase", "progress"] as const;
+export type ProjectPatch = Partial<Record<(typeof EDITABLE)[number], string | number | null>>;
 
 export async function updateProject(userId: string, id: string, patch: ProjectPatch): Promise<void> {
   await withUser(userId, async (c) => {
@@ -158,10 +175,25 @@ export async function setAssignees(userId: string, id: string, assigneeIds: stri
   await withUser(userId, (c) => replaceAssignees(c, id, assigneeIds, userId));
 }
 
-export async function addComment(userId: string, id: string, body: string): Promise<void> {
+export async function addComment(userId: string, id: string, body: string, parentId: string | null = null): Promise<void> {
   await withUser(userId, (c) =>
-    c.query("insert into comments (project_id, author_id, body) values ($1,$2,$3)", [id, userId, body]),
+    c.query("insert into comments (project_id, author_id, body, parent_id) values ($1,$2,$3,$4)", [id, userId, body, parentId]),
   );
+}
+
+/** Only the author can change a comment; the database returns no row for anyone else. */
+export async function editComment(userId: string, projectId: string, commentId: string, body: string): Promise<void> {
+  await withUser(userId, async (c) => {
+    const r = await c.query("update comments set body = $3 where id = $2 and project_id = $1 and deleted_at is null", [projectId, commentId, body]);
+    if (r.rowCount === 0) throw new NotAllowedError("Comment not found or not yours");
+  });
+}
+
+export async function deleteComment(userId: string, projectId: string, commentId: string): Promise<void> {
+  await withUser(userId, async (c) => {
+    const r = await c.query("update comments set deleted_at = now() where id = $2 and project_id = $1 and deleted_at is null", [projectId, commentId]);
+    if (r.rowCount === 0) throw new NotAllowedError("Comment not found or not yours");
+  });
 }
 
 /** Everything the weekly summary needs, already limited to what this user may see. */

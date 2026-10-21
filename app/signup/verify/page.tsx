@@ -15,7 +15,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   const devConsole = emailTransport() === "console";
   return (
     <main className="login">
-      <span className="mark"><Logo size={84} /></span>
+      <span className="mark"><Logo size={132} /></span>
       <div className="card">
         <h1>{reset ? "Choose a new password" : "Finish creating your account"}</h1>
         <p className="muted">We sent a 6-digit code to <b>{email}</b>. It expires in 10 minutes.</p>
@@ -29,8 +29,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
           <label htmlFor="code">Code from your email</label>
           <input id="code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]{6,7}" maxLength={7} required autoFocus />
           <label htmlFor="password">{reset ? "New password" : "Password"}</label>
-          <input id="password" name="password" type="password" required minLength={PASSWORD_MIN} maxLength={128} autoComplete="new-password" />
-          <p className="hint">At least {PASSWORD_MIN} characters.</p>
+          <input id="password" name="password" type="password" required minLength={PASSWORD_MIN} maxLength={128} autoComplete="new-password" placeholder={`${PASSWORD_MIN}+ characters`} />
           <label htmlFor="confirm">Confirm password</label>
           <input id="confirm" name="confirm" type="password" required minLength={PASSWORD_MIN} maxLength={128} autoComplete="new-password" />
           <p><button type="submit">{reset ? "Save password and sign in" : "Create account"}</button></p>

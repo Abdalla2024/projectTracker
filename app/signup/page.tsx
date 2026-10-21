@@ -13,10 +13,10 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
   const domains = allowedDomains();
   return (
     <main className="login">
-      <span className="mark"><Logo size={84} /></span>
+      <span className="mark"><Logo size={132} /></span>
       <div className="card">
         <h1>{reset ? "Reset your password" : "Create your account"}</h1>
-        <p className="muted">Enter your work email. We&apos;ll email you a 6-digit code to confirm it&apos;s you, then you choose a password.</p>
+        <p className="muted">We&apos;ll email you a 6-digit code, then you choose a password.</p>
         <Alerts error={error} />
         <form action={requestCodeAction}>
           <input type="hidden" name="mode" value={reset ? "reset" : "signup"} />
@@ -26,7 +26,6 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
         </form>
       </div>
       <p className="hint center">Already have an account? <Link href="/login">Sign in</Link></p>
-      <p className="hint center">Only addresses at {domains.length ? domains.join(", ") : "an allowed Ekiben domain"} can sign up. Demo build: do not enter customer or financial details.</p>
     </main>
   );
 }

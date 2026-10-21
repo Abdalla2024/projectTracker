@@ -37,13 +37,9 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <div className="page-head"><h1>Weekly summary</h1></div>
-      <p className="muted">
-        {win.label} · compares each project at Monday 12:00 AM ({zone}) with {win.isCurrent ? `now (${formatDateTime(win.end, zone)})` : "the end of that week"}.{" "}
-        {user.role === "admin" ? "Showing all projects." : "Showing only projects you can access."}
-      </p>
-      <p className="hint">
+      <p className="week-nav">
+        <span className="muted">{win.label}</span>
         {weeksAgo > 0 ? <Link href={`/summary?weeks=${weeksAgo - 1}`}>← Newer</Link> : null}
-        {weeksAgo > 0 ? " · " : ""}
         <Link href={`/summary?weeks=${weeksAgo + 1}`}>Previous week →</Link>
       </p>
 
@@ -51,7 +47,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
         <div className="stat"><b>{t.activeAtEnd}</b>active projects</div>
         <div className="stat"><b>{t.created}</b>created</div>
         <div className="stat"><b>{t.completed}</b>completed</div>
-        <div className="stat"><b>{t.newlyBlocked}</b>newly blocked</div>
+        <div className="stat"><b>{t.newlyBlocked}</b>newly stuck</div>
         <div className="stat"><b>{t.missedDeadlines}</b>missed deadlines</div>
         <div className="stat"><b>{t.approachingDeadlines}</b>due within 7 days</div>
       </div>
@@ -64,7 +60,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
               <li key={p.id}>
                 <Link href={`/?open=${p.id}#p-${p.id}`}><b>{p.name}</b></Link>{" "}
                 <span className={`chip ${p.endStatus}`}>{s(p.endStatus)}</span>
-                {p.newlyBlocked ? <> <span className="chip bad">newly blocked</span></> : null}
+                {p.newlyBlocked ? <> <span className="chip bad">newly stuck</span></> : null}
                 {p.completed ? <> <span className="chip ok">completed</span></> : null}
                 {p.deadlineFlag === "missed" ? <> <span className="chip bad">deadline missed ({d(p.deadline)})</span></> : null}
                 {p.deadlineFlag === "approaching" ? <> <span className="chip warn">due {d(p.deadline)}</span></> : null}
@@ -73,9 +69,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
             ))}
           </ul>
         )}
-        <p className="hint">
-          {t.unchanged} other project{t.unchanged === 1 ? "" : "s"} had no changes. This summary is generated from recorded project history, not written by AI. An admin should review it before sharing it outside the app.
-        </p>
+        <p className="hint">{t.unchanged} other project{t.unchanged === 1 ? "" : "s"} had no changes.</p>
       </section>
     </>
   );

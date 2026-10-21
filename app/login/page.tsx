@@ -12,10 +12,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const domains = allowedDomains();
   return (
     <main className="login">
-      <span className="mark"><Logo size={84} /></span>
+      <span className="mark"><Logo size={132} /></span>
       <div className="card">
         <h1>Sign in</h1>
-        <p className="muted">Welcome back. Use your email and password.</p>
         <Alerts error={error} />
         <form action={signInAction}>
           <label htmlFor="email">Email</label>
@@ -27,7 +26,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <p className="hint"><Link href="/signup?mode=reset">Forgot your password?</Link></p>
       </div>
       <p className="hint center">New here? <Link href="/signup">Create an account</Link></p>
-      <p className="hint center">Only addresses at {domains.length ? domains.join(", ") : "an allowed Ekiben domain"} can sign in. Demo build: do not enter customer or financial details.</p>
     </main>
   );
 }

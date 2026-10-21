@@ -3,12 +3,12 @@ import { Alerts } from "@/app/components/Alerts";
 import { NewProjectModal } from "@/app/components/NewProjectModal";
 import { ProjectDetail } from "@/app/components/ProjectDetail";
 import { StatusRing } from "@/app/components/StatusRing";
-import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
+import { PHASE_MAX, PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 import { getProjectDetail, isUuid, listPeople, listProjects } from "@/lib/projects";
 import { formatDate, formatDateTime, localDateString, timeZone } from "@/lib/time";
 
-const FILTERS = [{ key: "all", label: "All" }, { key: "in_progress", label: "In progress" }, { key: "blocked", label: "Blocked" }, { key: "not_started", label: "Not started" }, { key: "done", label: "Done" }];
+const FILTERS = [{ key: "all", label: "All" }, { key: "in_progress", label: "In progress" }, { key: "blocked", label: "Stuck" }, { key: "not_started", label: "Not started" }, { key: "done", label: "Done" }];
 
 export default async function ProjectsPage({
   searchParams,
@@ -34,32 +34,27 @@ export default async function ProjectsPage({
   ]);
 
   const isOverdue = (p: (typeof projects)[number]) => !["done", "cancelled"].includes(p.status) && !p.archived_at && !!p.deadline && p.deadline < today;
-  const live = projects.filter((p) => !p.archived_at);
   const countOf = (key: string) => (key === "all" ? projects.length : projects.filter((p) => p.status === key).length);
   const shown = filter === "all" ? projects : projects.filter((p) => p.status === filter);
-  const qs = (extra: Record<string, string>) => {
-    const q = new URLSearchParams({ ...(filter !== "all" ? { status: filter } : {}), ...(showArchived ? { archived: "1" } : {}), ...extra });
+  const url = (status: string, archived: boolean, extra: Record<string, string> = {}) => {
+    const q = new URLSearchParams({ ...(status !== "all" ? { status } : {}), ...(archived ? { archived: "1" } : {}), ...extra });
     return q.size ? `/?${q}` : "/";
   };
-  const tabHref = (key: string) => {
-    const q = new URLSearchParams({ ...(key !== "all" ? { status: key } : {}), ...(showArchived ? { archived: "1" } : {}) });
-    return q.size ? `/?${q}` : "/";
-  };
+  const qs = (extra: Record<string, string>) => url(filter, showArchived, extra);
+  const tabHref = (key: string) => url(key, showArchived);
 
   return (
     <>
       <div className="page-head">
         <div>
           <h1>Projects</h1>
-          <p className="muted">
-            {live.length} active · {isAdmin ? "you can see every project" : "yours, plus any an admin assigned to you"}
-          </p>
         </div>
         <NewProjectModal
           people={people.map((p) => ({ id: p.id, name: p.name }))}
           isAdmin={isAdmin}
           statuses={STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
           priorities={PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] }))}
+          phaseMax={PHASE_MAX}
           defaultOpen={modalOpen}
           error={modalOpen ? sp.error : undefined}
         />
@@ -74,7 +69,7 @@ export default async function ProjectsPage({
             </Link>
           ))}
         </div>
-        <Link className="hint" href={showArchived ? tabHref(filter) : `${tabHref(filter)}${tabHref(filter).includes("?") ? "&" : "?"}archived=1`}>
+        <Link className="archive-toggle" href={url(filter, !showArchived)}>
           {showArchived ? "Hide archived" : "Show archived"}
         </Link>
       </div>
@@ -94,11 +89,12 @@ export default async function ProjectsPage({
                   scroll={false}
                   aria-expanded={open}
                 >
-                  <StatusRing status={p.status} />
+                  <StatusRing status={p.status} progress={p.progress} phase={p.phase} />
                   <div className="project-main">
                     <span className="title">{p.name}</span>
                     {p.next_step ? <span className="hint">Next: {p.next_step}</span> : null}
                     <span className="tags">
+                      <span className={`chip ${p.status}`}>{STATUS_LABELS[p.status]}</span>
                       <span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]} priority</span>
                       {p.archived_at ? <span className="chip">archived</span> : null}
                       {p.deadline ? <span className={`chip ${overdue ? "bad" : ""}`}>{overdue ? "Overdue · " : "Due "}{formatDate(p.deadline)}</span> : null}

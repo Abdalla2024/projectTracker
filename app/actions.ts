@@ -3,9 +3,9 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requestLoginCode, requireUser, signInWithPassword, signOut, signUpWithCode } from "@/lib/auth";
-import { PRIORITIES, STATUSES } from "@/lib/constants";
+import { PHASE_MAX, PRIORITIES, STATUSES } from "@/lib/constants";
 import {
-  NotAllowedError, addComment, createProject, getProjectDetail, isUuid, setArchived, setAssignees, updateProject,
+  NotAllowedError, addComment, createProject, deleteComment, editComment, getProjectDetail, isUuid, setArchived, setAssignees, updateProject,
 } from "@/lib/projects";
 
 const enc = encodeURIComponent;
@@ -75,6 +75,8 @@ const fields = {
   priority: z.enum(PRIORITIES),
   deadline: optionalDate,
   next_step: z.string().trim().max(500),
+  phase: z.string().trim().max(PHASE_MAX, `The phase can be at most ${PHASE_MAX} characters.`),
+  progress: z.coerce.number().int().min(0).max(100),
 };
 
 export async function createProjectAction(formData: FormData) {
@@ -84,6 +86,7 @@ export async function createProjectAction(formData: FormData) {
     .safeParse({
       name: str(formData, "name"), description: str(formData, "description"), priority: str(formData, "priority"),
       deadline: str(formData, "deadline"), next_step: str(formData, "next_step"), status: str(formData, "status"),
+      phase: str(formData, "phase"), progress: str(formData, "progress") || "0",
     });
   if (!parsed.success) redirect(`/?new=1&error=${enc(parsed.error.issues[0].message)}`);
 
@@ -109,14 +112,14 @@ export async function updateProjectAction(formData: FormData) {
 
   const schema = fullEdit
     ? z.object({ ...fields, status: z.enum(STATUSES) })
-    : z.object({ status: z.enum(STATUSES), next_step: fields.next_step });
+    : z.object({ status: z.enum(STATUSES), next_step: fields.next_step, phase: fields.phase, progress: fields.progress });
   const raw = Object.fromEntries(
-    (fullEdit ? ["name", "description", "priority", "deadline", "next_step", "status"] : ["status", "next_step"]).map((k) => [k, str(formData, k)]),
+    (fullEdit ? ["name", "description", "priority", "deadline", "next_step", "status", "phase", "progress"] : ["status", "next_step", "phase", "progress"]).map((k) => [k, str(formData, k)]),
   );
   const parsed = schema.safeParse(raw);
   if (!parsed.success) redirect(`${back}&error=${enc(parsed.error.issues[0].message)}#p-${id}`);
 
-  await attempt(back, () => updateProject(user.id, id, parsed.data as Record<string, string | null>));
+  await attempt(back, () => updateProject(user.id, id, parsed.data as Record<string, string | number | null>));
   redirect(`${back}&saved=1#p-${id}`);
 }
 
@@ -134,7 +137,28 @@ export async function commentAction(formData: FormData) {
   if (!isUuid(id)) redirect("/");
   const parsed = z.string().trim().min(1, "Write a comment first.").max(4000).safeParse(str(formData, "body"));
   if (!parsed.success) redirect(`/?open=${id}&error=${enc(parsed.error.issues[0].message)}#p-${id}`);
-  await attempt(`/?open=${id}`, () => addComment(user.id, id, parsed.data));
+  const parent = str(formData, "parent_id");
+  await attempt(`/?open=${id}`, () => addComment(user.id, id, parsed.data, isUuid(parent) ? parent : null));
+  redirect(`/?open=${id}#c-${id}`);
+}
+
+export async function editCommentAction(formData: FormData) {
+  const user = await requireUser();
+  const id = str(formData, "id");
+  const commentId = str(formData, "comment_id");
+  if (!isUuid(id) || !isUuid(commentId)) redirect("/");
+  const parsed = z.string().trim().min(1, "A comment can't be empty.").max(4000).safeParse(str(formData, "body"));
+  if (!parsed.success) redirect(`/?open=${id}&error=${enc(parsed.error.issues[0].message)}#c-${id}`);
+  await attempt(`/?open=${id}`, () => editComment(user.id, id, commentId, parsed.data));
+  redirect(`/?open=${id}#c-${id}`);
+}
+
+export async function deleteCommentAction(formData: FormData) {
+  const user = await requireUser();
+  const id = str(formData, "id");
+  const commentId = str(formData, "comment_id");
+  if (!isUuid(id) || !isUuid(commentId)) redirect("/");
+  await attempt(`/?open=${id}`, () => deleteComment(user.id, id, commentId));
   redirect(`/?open=${id}#c-${id}`);
 }
 

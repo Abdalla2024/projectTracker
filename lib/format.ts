@@ -6,6 +6,7 @@ const label = (field: string | null, v: string | null) => {
   if (field === "status") return STATUS_LABELS[v] ?? v;
   if (field === "priority") return PRIORITY_LABELS[v] ?? v;
   if (field === "deadline") return formatDate(v);
+  if (field === "progress") return `${v}%`;
   return v.length > 80 ? `${v.slice(0, 80)}…` : v;
 };
 
@@ -15,6 +16,8 @@ export function describeEvent(e: { event_type: string; field: string | null; old
     case "archived": return "archived the project";
     case "unarchived": return "restored the project from the archive";
     case "commented": return "added a comment";
+    case "comment_edited": return "edited a comment";
+    case "comment_deleted": return "deleted a comment";
     case "assignee_added": return `assigned ${e.new_value ?? "someone"}`;
     case "assignee_removed": return `unassigned ${e.old_value ?? "someone"}`;
     case "updated": {

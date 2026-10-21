@@ -105,9 +105,9 @@ try {
   }
   const newProject = async (c, actor, p) =>
     (await c.query(
-      `insert into projects (name, description, status, priority, deadline, next_step, created_by)
-       values ($1,$2,$3,$4,$5,$6,$7) returning id`,
-      [p.name, p.description ?? "", p.status ?? "not_started", p.priority ?? "normal", p.deadline ?? null, p.next_step ?? "", id[actor]],
+      `insert into projects (name, description, status, priority, deadline, next_step, phase, progress, created_by)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id`,
+      [p.name, p.description ?? "", p.status ?? "not_started", p.priority ?? "normal", p.deadline ?? null, p.next_step ?? "", p.phase ?? "", p.progress ?? 0, id[actor]],
     )).rows[0].id;
   const assign = (c, pid, ...keys) => Promise.all(keys.map((k) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [pid, id[k], id.admin])));
   const comment = (c, pid, actor, body) => c.query("insert into comments (project_id, author_id, body) values ($1,$2,$3)", [pid, id[actor], body]);
@@ -115,33 +115,33 @@ try {
   const P = {};
 
   // 1. Opening checklist: created by a member, later assigned by the admin to two members.
-  await step(old(9), "m1", async (c) => { P.checklist = await newProject(c, "m1", { name: "[DEMO] Refresh the opening checklist", description: "Synthetic example project.", next_step: "Draft new checklist" }); });
+  await step(old(9), "m1", async (c) => { P.checklist = await newProject(c, "m1", { name: "[DEMO] Refresh the opening checklist", description: "Synthetic example project.", next_step: "Draft new checklist", phase: "Drafting", progress: 40 }); });
   await step(old(9, 1), "admin", (c) => assign(c, P.checklist, "m1", "m2"));
   await step(old(8), "m1", (c) => set(c, P.checklist, "status = 'in_progress'"));
   await step(week(0.3), "m2", (c) => set(c, P.checklist, "next_step = $2", "Trial the checklist on one shift"));
   await step(week(0.35), "admin", (c) => comment(c, P.checklist, "admin", "Looks good. Please share a photo of the trial run."));
 
   // 2. Catering layout: becomes blocked this week, with a missed deadline.
-  await step(old(6), "admin", async (c) => { P.catering = await newProject(c, "admin", { name: "[DEMO] Redesign catering menu layout", priority: "high", next_step: "Choose a template" }); });
+  await step(old(6), "admin", async (c) => { P.catering = await newProject(c, "admin", { name: "[DEMO] Redesign catering menu layout", priority: "high", next_step: "Choose a template", phase: "Print proofs", progress: 35 }); });
   await step(old(6, 1), "admin", (c) => assign(c, P.catering, "m2"));
   await step(old(5), "m2", (c) => set(c, P.catering, "status = 'in_progress'"));
   await step(old(4), "admin", (c) => set(c, P.catering, "deadline = $2", dateIn(-2)));
   await step(week(0.4), "m2", (c) => set(c, P.catering, "status = 'blocked', next_step = $2", "Waiting on sample proofs"));
-  await step(week(0.42), "m2", (c) => comment(c, P.catering, "m2", "Blocked until the printer sends sample proofs."));
+  await step(week(0.42), "m2", (c) => comment(c, P.catering, "m2", "Stuck until the printer sends sample proofs."));
 
   // 3. A private member project that other members must not see; gets an approaching deadline.
-  await step(old(3), "m3", async (c) => { P.soap = await newProject(c, "m3", { name: "[DEMO] Compare two hand-soap options (private to creator)", next_step: "List options" }); });
+  await step(old(3), "m3", async (c) => { P.soap = await newProject(c, "m3", { name: "[DEMO] Compare two hand-soap options (private to creator)", next_step: "List options", phase: "Researching", progress: 15 }); });
   await step(week(0.2), "m3", (c) => set(c, P.soap, "status = 'in_progress'"));
   await step(week(0.5), "m3", (c) => set(c, P.soap, "deadline = $2", dateIn(3)));
 
   // 4. Completed this week.
-  await step(old(14), "admin", async (c) => { P.allergen = await newProject(c, "admin", { name: "[DEMO] Update allergen sign templates", status: "in_progress", next_step: "Send final files" }); });
+  await step(old(14), "admin", async (c) => { P.allergen = await newProject(c, "admin", { name: "[DEMO] Update allergen sign templates", status: "in_progress", next_step: "Send final files", phase: "Final files", progress: 80 }); });
   await step(old(14, 1), "admin", (c) => assign(c, P.allergen, "m1"));
   await step(week(0.55), "m1", (c) => comment(c, P.allergen, "m1", "Final files sent."));
   await step(week(0.6), "m1", (c) => set(c, P.allergen, "status = 'done', next_step = ''"));
 
   // 5. Created this week, assigned to two members at once.
-  await step(week(0.15), "admin", async (c) => { P.patio = await newProject(c, "admin", { name: "[DEMO] Plan spring patio setup", description: "Synthetic example project.", priority: "high", deadline: dateIn(25), next_step: "Walk the space" }); });
+  await step(week(0.15), "admin", async (c) => { P.patio = await newProject(c, "admin", { name: "[DEMO] Plan spring patio setup", description: "Synthetic example project.", priority: "high", deadline: dateIn(25), next_step: "Walk the space", phase: "Site walk", progress: 5 }); });
   await step(week(0.16), "admin", (c) => assign(c, P.patio, "m2", "m3"));
 
   // 6. Fellowship-style example, assigned to one member.

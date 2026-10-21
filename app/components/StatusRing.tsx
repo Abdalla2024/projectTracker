@@ -9,8 +9,6 @@ const STOPS: [number, [number, number, number]][] = [
 const GRADIENT = "conic-gradient(from 0deg, #ef4444 0%, #f59e0b 50%, #22c55e 100%)";
 const GRAY = "conic-gradient(from 0deg, #cbd0d8, #cbd0d8)";
 
-const PROGRESS: Record<string, number> = { not_started: 0, in_progress: 55, blocked: 25, done: 100, cancelled: 100 };
-
 function colorAt(t: number): string {
   for (let i = 1; i < STOPS.length; i++) {
     if (t <= STOPS[i][0]) {
@@ -23,11 +21,13 @@ function colorAt(t: number): string {
   return "rgb(34,197,94)";
 }
 
-export function StatusRing({ status, size = 104 }: { status: string; size?: number }) {
-  const pct = PROGRESS[status] ?? 0;
+export function StatusRing({ status, progress, phase, size = 104 }: { status: string; progress: number; phase?: string; size?: number }) {
+  // A finished project always shows a full ring; otherwise the slider value decides.
+  const pct = status === "done" ? 100 : Math.max(0, Math.min(100, progress));
   const cancelled = status === "cancelled";
   const stroke = Math.round(size * 0.115);
-  const label = STATUS_LABELS[status] ?? status;
+  const label = phase?.trim() || STATUS_LABELS[status] || status;
+  const sizeClass = label.length > 17 ? "xs" : label.length > 10 ? "sm" : "";
   const style = {
     "--size": `${size}px`, "--stroke": `${stroke}px`, "--pct": pct,
     "--grad": cancelled ? GRAY : GRADIENT,
@@ -35,12 +35,12 @@ export function StatusRing({ status, size = 104 }: { status: string; size?: numb
     "--end": cancelled ? "#cbd0d8" : colorAt(pct / 100),
   } as CSSProperties;
   return (
-    <div className="ring" style={style} role="img" aria-label={`Status: ${label}`}>
+    <div className="ring" style={style} role="img" aria-label={`${label}, ${pct}% complete, ${STATUS_LABELS[status] ?? status}`}>
       <div className="ring-track" />
       {pct > 0 ? <div className="ring-arc" /> : null}
       {pct > 0 ? <div className="ring-cap start"><i /></div> : null}
       <div className="ring-cap end"><i /><b /></div>
-      <span className="ring-label">{label}</span>
+      <span className={`ring-label ${sizeClass}`}>{label}</span>
     </div>
   );
 }

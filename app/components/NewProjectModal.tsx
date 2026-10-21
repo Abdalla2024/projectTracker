@@ -2,17 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { createProjectAction } from "@/app/actions";
+import { ProgressField } from "@/app/components/ProgressField";
 
 interface Props {
   people: { id: string; name: string }[];
   isAdmin: boolean;
   statuses: { value: string; label: string }[];
   priorities: { value: string; label: string }[];
+  phaseMax: number;
   defaultOpen?: boolean;
   error?: string;
 }
 
-export function NewProjectModal({ people, isAdmin, statuses, priorities, defaultOpen, error }: Props) {
+export function NewProjectModal({ people, isAdmin, statuses, priorities, phaseMax, defaultOpen, error }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (defaultOpen) ref.current?.showModal();
@@ -57,6 +59,14 @@ export function NewProjectModal({ people, isAdmin, statuses, priorities, default
               <label htmlFor="np-next">Next step</label>
               <input id="np-next" name="next_step" type="text" maxLength={500} />
             </div>
+            <div>
+              <label htmlFor="np-phase">Current phase</label>
+              <input id="np-phase" name="phase" type="text" maxLength={phaseMax} placeholder="e.g. Drafting menu" />
+            </div>
+            <div>
+              <label htmlFor="np-progress">Progress</label>
+              <ProgressField id="np-progress" />
+            </div>
           </div>
           {isAdmin ? (
             <>
@@ -67,9 +77,7 @@ export function NewProjectModal({ people, isAdmin, statuses, priorities, default
                 ))}
               </div>
             </>
-          ) : (
-            <p className="hint" style={{ marginTop: 14 }}>You&apos;ll be the owner of this project. An admin can assign it to others later.</p>
-          )}
+          ) : null}
           <div className="modal-actions">
             <button type="button" className="secondary" onClick={() => ref.current?.close()}>Cancel</button>
             <button type="submit">Create project</button>
