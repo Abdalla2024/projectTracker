@@ -13,8 +13,8 @@ const ev = (project_id: string, at: Date, event_type: string, extra: Partial<Eve
   id: ++seq, project_id, event_type, field: null, old_value: null, new_value: null, subject_id: null, occurred_at: at, ...extra,
 });
 const proj = (id: string, name: string, extra: Partial<ProjectRow> = {}): ProjectRow => ({
-  id, name, status: "not_started", priority: "normal", deadline: null, next_step: "", archived_at: null,
-  created_at: before(48), assignees: [], ...extra,
+  id, name, status: "not_started", priority: "normal", deadline: null, next_step: "", description: "", phase: "", progress: 0,
+  archived_at: null, created_at: before(48), created_by: "creator", creator_name: "Creator", assignees: [], ...extra,
 });
 const upd = (pid: string, at: Date, field: string, o: string | null, n: string | null) =>
   ev(pid, at, "updated", { field, old_value: o, new_value: n });

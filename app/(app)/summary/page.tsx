@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PRIORITY_LABELS, STATUS_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 import { loadSummaryData } from "@/lib/projects";
+import { buildNarrative } from "@/lib/narrative";
 import { buildWeeklySummary, type ProjectSummary } from "@/lib/summary";
 import { formatDate, formatDateTime, timeZone, weekWindow } from "@/lib/time";
 
@@ -33,6 +34,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
   const data = await loadSummaryData(user.id, win.start);
   const summary = buildWeeklySummary({ ...data, start: win.start, end: win.end, zone });
   const t = summary.totals;
+  const narrative = buildNarrative({ ...data, start: win.start, end: win.end, zone, period: win.isCurrent ? "this week" : "that week" });
 
   return (
     <>
@@ -52,8 +54,25 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
         <div className="stat"><b>{t.approachingDeadlines}</b>due within 7 days</div>
       </div>
 
-      <section className="card">
-        <h2>What changed</h2>
+      <section className="narrative">
+        {narrative.length === 0 ? <p className="muted">Nothing to report for this period.</p> : narrative.map((person) => (
+          <article className="card person" key={person.id}>
+            <h3>{person.name}</h3>
+            {person.started ? <p className="started">{person.started}</p> : null}
+            {person.projects.map((p) => (
+              <div className="story" key={p.id}>
+                <p>
+                  {p.prefix}<Link href={`/?open=${p.id}#p-${p.id}`}><b>{p.name}</b></Link>{p.suffix}{" "}
+                  {p.sentences.join(" ")}
+                </p>
+              </div>
+            ))}
+          </article>
+        ))}
+      </section>
+
+      <details className="card changes">
+        <summary>All changes</summary>
         {summary.projects.length === 0 ? <p className="muted">Nothing to report for this period.</p> : (
           <ul className="plain">
             {summary.projects.map((p) => (
@@ -70,7 +89,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
           </ul>
         )}
         <p className="hint">{t.unchanged} other project{t.unchanged === 1 ? "" : "s"} had no changes.</p>
-      </section>
+      </details>
     </>
   );
 }

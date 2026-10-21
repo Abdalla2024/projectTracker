@@ -16,8 +16,13 @@ export interface ProjectRow {
   priority: string;
   deadline: string | null; // YYYY-MM-DD
   next_step: string;
+  description: string;
+  phase: string;
+  progress: number;
   archived_at: Date | null;
   created_at: Date;
+  created_by: string;
+  creator_name: string;
   assignees: Person[];
 }
 
@@ -38,6 +43,9 @@ export interface ProjectState {
   priority: string;
   deadline: string | null;
   next_step: string;
+  description: string;
+  phase: string;
+  progress: number;
   archived: boolean;
   assignees: Map<string, string>;
 }
@@ -55,6 +63,9 @@ export function stateAt(project: ProjectRow, events: EventRow[], at: Date): Proj
     priority: project.priority,
     deadline: project.deadline,
     next_step: project.next_step,
+    description: project.description,
+    phase: project.phase,
+    progress: project.progress,
     archived: project.archived_at !== null,
     assignees: new Map(project.assignees.map((p) => [p.id, p.name])),
   };
@@ -68,6 +79,9 @@ export function stateAt(project: ProjectRow, events: EventRow[], at: Date): Proj
         if (e.field === "priority") state.priority = e.old_value ?? state.priority;
         if (e.field === "deadline") state.deadline = e.old_value;
         if (e.field === "next_step") state.next_step = e.old_value ?? "";
+        if (e.field === "description") state.description = e.old_value ?? "";
+        if (e.field === "phase") state.phase = e.old_value ?? "";
+        if (e.field === "progress") state.progress = Number(e.old_value ?? 0);
         break;
       case "assignee_added":
         if (e.subject_id) state.assignees.delete(e.subject_id);

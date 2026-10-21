@@ -201,10 +201,11 @@ export async function loadSummaryData(userId: string, since: Date): Promise<{ pr
   return withUser(userId, async (c) => {
     const projects = (
       await c.query(
-        `select p.id, p.name, p.status, p.priority, p.deadline::text as deadline, p.next_step, p.archived_at, p.created_at,
+        `select p.id, p.name, p.status, p.priority, p.deadline::text as deadline, p.next_step, p.description, p.phase, p.progress,
+                p.archived_at, p.created_at, p.created_by, cr.display_name as creator_name,
                 coalesce((select json_agg(json_build_object('id', pr.id, 'name', pr.display_name))
                           from project_assignees a join profiles pr on pr.id = a.user_id where a.project_id = p.id), '[]') as assignees
-         from projects p`,
+         from projects p join profiles cr on cr.id = p.created_by`,
       )
     ).rows as ProjectRow[];
     const events = (
