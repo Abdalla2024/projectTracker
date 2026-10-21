@@ -54,6 +54,8 @@ export default async function ProjectPage({
       </div>
       <Alerts error={sp.error} saved={sp.saved} />
 
+      <div className="cols">
+      <div>
       <section className="card">
         <h2>Details</h2>
         <dl className="details">
@@ -134,6 +136,8 @@ export default async function ProjectPage({
         </form>
       ) : null}
 
+      </div>
+      <div>
       <section className="card" id="comments">
         <h2>Comments and feedback</h2>
         {project.comments.length === 0 ? <p className="muted">No comments yet.</p> : (
@@ -164,6 +168,8 @@ export default async function ProjectPage({
           ))}
         </ul>
       </section>
+      </div>
+      </div>
     </>
   );
 }

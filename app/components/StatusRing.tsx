@@ -9,7 +9,7 @@ const RING: Record<string, { pct: number; color: string; text: string }> = {
   cancelled: { pct: 100, color: "#a1a1aa", text: "#6b7280" },
 };
 
-export function StatusRing({ status, size = 72 }: { status: string; size?: number }) {
+export function StatusRing({ status, size = 72, compact = false }: { status: string; size?: number; compact?: boolean }) {
   const { pct, color, text } = RING[status] ?? RING.not_started;
   const stroke = 6;
   const r = (size - stroke) / 2;
@@ -26,7 +26,7 @@ export function StatusRing({ status, size = 72 }: { status: string; size?: numbe
           />
         ) : null}
       </svg>
-      <span className="ring-label" style={{ color: text }}>{label}</span>
+      {compact ? null : <span className="ring-label" style={{ color: text }}>{label}</span>}
     </div>
   );
 }
