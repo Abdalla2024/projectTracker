@@ -2,6 +2,7 @@ import "server-only";
 import type pg from "pg";
 import { withUser } from "./db";
 import type { EventRow, ProjectRow } from "./summary";
+import type { SummaryComment } from "./narrative";
 
 // Note: none of these functions filter by "who may see this". The database does that (row-level
 // security). They are plain queries; a bug here can show less, never more, than the user may see.
@@ -197,7 +198,7 @@ export async function deleteComment(userId: string, projectId: string, commentId
 }
 
 /** Everything the weekly summary needs, already limited to what this user may see. */
-export async function loadSummaryData(userId: string, since: Date): Promise<{ projects: ProjectRow[]; events: EventRow[] }> {
+export async function loadSummaryData(userId: string, since: Date): Promise<{ projects: ProjectRow[]; events: EventRow[]; comments: SummaryComment[] }> {
   return withUser(userId, async (c) => {
     const projects = (
       await c.query(
@@ -215,6 +216,14 @@ export async function loadSummaryData(userId: string, since: Date): Promise<{ pr
         [since],
       )
     ).rows as EventRow[];
-    return { projects, events };
+    const comments = (
+      await c.query(
+        `select c.id, c.project_id, pr.display_name as author_name, c.body, c.parent_id, c.created_at, c.deleted_at
+         from comments c join profiles pr on pr.id = c.author_id
+         where c.created_at > $1 order by c.created_at, c.id`,
+        [since],
+      )
+    ).rows as SummaryComment[];
+    return { projects, events, comments };
   });
 }

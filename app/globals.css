@@ -233,3 +233,5 @@ dialog.modal form { padding: 30px; }
 .changes summary { cursor: pointer; font-weight: 600; color: var(--muted); list-style: none; }
 .changes summary::-webkit-details-marker { display: none; }
 .changes[open] summary { margin-bottom: 14px; }
+
+.project-main .phase { font-size: .95rem; color: var(--muted); font-weight: 550; }

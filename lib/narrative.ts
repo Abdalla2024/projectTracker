@@ -28,12 +28,34 @@ export interface NarrativePerson {
 }
 
 const MAX_DESCRIPTION = 220;
+const MAX_COMMENT = 200;
+const MAX_COMMENTS_SHOWN = 3;
+
+export interface SummaryComment {
+  id: string;
+  project_id: string;
+  author_name: string;
+  body: string;
+  parent_id: string | null;
+  created_at: Date;
+  deleted_at: Date | null;
+}
+
+/** A comment, on one line, shortened at a word, in curly quotes. */
+export function quoteText(body: string): string {
+  let text = body.replace(/\s+/g, " ").trim().replace(/[“”]/g, '"');
+  if (text.length > MAX_COMMENT) text = `${text.slice(0, text.lastIndexOf(" ", MAX_COMMENT) > 60 ? text.lastIndexOf(" ", MAX_COMMENT) : MAX_COMMENT).replace(/[\s,;:]+$/, "")}…`;
+  return `“${text}”`;
+}
+
+/** People's own curly quotes would unbalance the quotes the write-up adds itself. */
+const plain = (s: string) => s.replace(/[“”]/g, '"');
 
 const endSentence = (s: string) => (/[.!?…]$/.test(s) ? s : `${s}.`);
 
 /** First part of a description that reads as a sentence fragment after "In this project, ". */
 export function describeInline(description: string): string {
-  const text = description.replace(/\s+/g, " ").trim();
+  const text = plain(description).replace(/\s+/g, " ").trim();
   if (!text) return "";
   let cut = text;
   if (text.length > MAX_DESCRIPTION) {
@@ -67,8 +89,16 @@ export function buildNarrative(input: {
   zone: string;
   /** "this week" for the current week, "that week" for earlier ones. */
   period: string;
+  comments?: SummaryComment[];
 }): NarrativePerson[] {
   const { start, end, zone, period } = input;
+  const commentsByProject = new Map<string, SummaryComment[]>();
+  for (const c of input.comments ?? []) {
+    if (c.deleted_at || !c.body.trim() || c.created_at <= start || c.created_at > end) continue;
+    const list = commentsByProject.get(c.project_id) ?? [];
+    list.push(c);
+    commentsByProject.set(c.project_id, list);
+  }
   const eventsByProject = new Map<string, EventRow[]>();
   for (const e of input.events) {
     const list = eventsByProject.get(e.project_id) ?? [];
@@ -94,7 +124,7 @@ export function buildNarrative(input: {
     const s0 = stateAt(project, events, start);
     const inWindow = events.filter((e) => e.occurred_at > start && e.occurred_at <= end);
 
-    if (s0 === null) person(project.created_by, project.creator_name).startedTitles.push(s1.name);
+    if (s0 === null) person(project.created_by, project.creator_name).startedTitles.push(plain(s1.name));
 
     const completed = s1.status === "done" && s0?.status !== "done";
     const open = !CLOSED_STATUSES.includes(s1.status);
@@ -112,21 +142,27 @@ export function buildNarrative(input: {
       if (completed) {
         sentences.push(`It was finished ${period}.`);
       } else {
-        if (s1.phase) sentences.push(`${firstName(member.name)} is currently working on the "${s1.phase}" phase (${s1.progress}% complete).`);
+        if (s1.phase) sentences.push(`${firstName(member.name)} is currently working on the "${plain(s1.phase)}" phase (${s1.progress}% complete).`);
         else if (s1.progress > 0) sentences.push(`The project is ${s1.progress}% complete.`);
         if (s1.status === "blocked") sentences.push("The project is currently stuck.");
         else if (s1.status === "not_started" && !s1.phase && s1.progress === 0) sentences.push("It has not started yet.");
-        if (s1.next_step) sentences.push(`Next step: ${endSentence(s1.next_step)}`);
+        if (s1.next_step) sentences.push(`Next step: ${endSentence(plain(s1.next_step))}`);
       }
 
       const moved: string[] = [];
       if (s0 && s0.status !== s1.status && !completed) moved.push(`the status changed from ${label(s0.status)} to ${label(s1.status)}`);
-      if (s0 && s0.phase !== s1.phase && s1.phase) moved.push(`the phase moved ${s0.phase ? `from "${s0.phase}" ` : ""}to "${s1.phase}"`);
+      if (s0 && s0.phase !== s1.phase && s1.phase) moved.push(`the phase moved ${s0.phase ? `from "${plain(s0.phase)}" ` : ""}to "${plain(s1.phase)}"`);
       if (s0 && s0.progress !== s1.progress) moved.push(`progress went from ${s0.progress}% to ${s1.progress}%`);
-      const comments = inWindow.filter((e) => e.event_type === "commented").length;
-      if (comments) moved.push(`${plural(comments, "new comment")} ${comments === 1 ? "was" : "were"} added`);
       if (s0 === null) moved.unshift("the project was created");
       if (moved.length) sentences.push(`${period[0].toUpperCase()}${period.slice(1)}, ${list(moved)}.`);
+
+      const said = (commentsByProject.get(project.id) ?? []).slice().sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
+      const shown = said.slice(-MAX_COMMENTS_SHOWN);
+      if (said.length > shown.length) {
+        const n = said.length - shown.length;
+        sentences.push(`${plural(n, "earlier comment")} ${n === 1 ? "is" : "are"} not shown here.`);
+      }
+      for (const c of shown) sentences.push(`${c.author_name} ${c.parent_id ? "replied" : "commented"}: ${quoteText(c.body)}.`);
 
       if (open && s1.deadline) {
         const days = Math.round(DateTime.fromISO(s1.deadline, { zone }).startOf("day").diff(endDay, "days").days);
@@ -154,5 +190,68 @@ export function buildNarrative(input: {
     p.projects.sort((a, b) => (p.rank.get(a.id)! - p.rank.get(b.id)!) || a.name.localeCompare(b.name));
     if (p.started || p.projects.length) out.push({ id: p.id, name: p.name, started: p.started, projects: p.projects });
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  return finish(out.sort((a, b) => a.name.localeCompare(b.name)));
+}
+
+// ---- Quality check -------------------------------------------------------------------------------
+// The template sentences are fixed, but they contain project titles, descriptions, next steps and comments
+// typed by people. This check runs on everything the summary shows: each sentence must start like a
+// sentence, end like one, have balanced quotes, and contain no leftover placeholder text. A sentence
+// that fails is repaired when that is safe (spacing, capital letter, final period) and otherwise left out,
+// so the page never shows a fragment. It cannot judge whether the wording is *sensible*: that depends on what
+// people wrote.
+
+/** What is wrong with one sentence, or null when it is well formed. */
+export function sentenceProblem(sentence: string): string | null {
+  const s = sentence;
+  if (!s.trim()) return "empty";
+  if (/\s{2,}/.test(s) || s !== s.trim()) return "extra spaces";
+  if (!/^[\p{Lu}\p{N}“"'(]/u.test(s)) return "does not start with a capital letter";
+  if (!/[.!?…][”"')]*$/.test(s)) return "does not end with punctuation";
+  if (/NaN%|\[object |"undefined"|“undefined”|\bundefined%|\(undefined\)|\{\{|\}\}/.test(s)) return "contains placeholder text";
+  if ((s.match(/“/g)?.length ?? 0) !== (s.match(/”/g)?.length ?? 0)) return "unbalanced quotes";
+  if (/“\s*”|""/.test(s)) return "empty quotes";
+  if (/\.\.(?!\.)/.test(s) || /,\./.test(s)) return "doubled punctuation";
+  return null;
+}
+
+/** Repairs spacing, the first letter and the final period; does not change wording. */
+export function tidySentence(sentence: string): string {
+  let s = sentence.replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  s = s.replace(/^([\p{Ll}])/u, (c) => c.toUpperCase());
+  s = s.replace(/\.{2}(?!\.)/g, ".").replace(/,\./g, ".");
+  if (!/[.!?…][”"')]*$/.test(s)) s += ".";
+  return s;
+}
+
+function finish(people: NarrativePerson[]): NarrativePerson[] {
+  return people.map((p) => ({
+    ...p,
+    started: p.started ? tidySentence(p.started) : "",
+    projects: p.projects.map((pr) => {
+      // A title that ends in punctuation would collide with the full stop that closes the sentence.
+      const name = pr.name.replace(/[“”]/g, "\"").replace(/[\s,;:–-]+$/u, "") || pr.name;
+      const suffix = /[.!?…]$/.test(name) ? pr.suffix.replace(/^\./, "") : pr.suffix;
+      return { ...pr, name, suffix };
+    }).map((pr) => ({
+      ...pr,
+      prefix: pr.prefix.replace(/^\p{Ll}/u, (c) => c.toUpperCase()),
+      sentences: pr.sentences.map(tidySentence).filter((s) => sentenceProblem(s) === null),
+    })),
+  }));
+}
+
+/** Every problem left in the finished write-up (used by tests and available for monitoring). */
+export function narrativeProblems(people: NarrativePerson[]): string[] {
+  const out: string[] = [];
+  for (const p of people) {
+    if (p.started) { const x = sentenceProblem(p.started); if (x) out.push(`${p.name} (started): ${x}`); }
+    for (const pr of p.projects) {
+      const lead = sentenceProblem(`${pr.prefix}${pr.name}${pr.suffix}`.replace(/\s+/g, " ").trim());
+      if (lead) out.push(`${p.name} / ${pr.name} (lead): ${lead}`);
+      for (const s of pr.sentences) { const x = sentenceProblem(s); if (x) out.push(`${p.name} / ${pr.name}: ${x} — ${s}`); }
+    }
+  }
+  return out;
 }

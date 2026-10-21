@@ -34,7 +34,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
   const data = await loadSummaryData(user.id, win.start);
   const summary = buildWeeklySummary({ ...data, start: win.start, end: win.end, zone });
   const t = summary.totals;
-  const narrative = buildNarrative({ ...data, start: win.start, end: win.end, zone, period: win.isCurrent ? "this week" : "that week" });
+  const narrative = buildNarrative({ projects: data.projects, events: data.events, comments: data.comments, start: win.start, end: win.end, zone, period: win.isCurrent ? "this week" : "that week" });
 
   return (
     <>

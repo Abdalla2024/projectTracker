@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNarrative, describeInline } from "@/lib/narrative";
+import { buildNarrative, describeInline, narrativeProblems, quoteText, sentenceProblem, tidySentence, type SummaryComment } from "@/lib/narrative";
 import type { EventRow, ProjectRow } from "@/lib/summary";
 
 const Z = "America/New_York";
@@ -18,8 +18,12 @@ const proj = (id: string, name: string, extra: Partial<ProjectRow> = {}): Projec
   id, name, status: "in_progress", priority: "normal", deadline: null, next_step: "", description: "", phase: "", progress: 0,
   archived_at: null, created_at: before(72), created_by: "u1", creator_name: "Sam Rivera", assignees: [], ...extra,
 });
-const run = (projects: ProjectRow[], events: EventRow[] = [], period = "this week") =>
-  buildNarrative({ projects, events, start: START, end: END, zone: Z, period });
+const run = (projects: ProjectRow[], events: EventRow[] = [], period = "this week", comments: SummaryComment[] = []) =>
+  buildNarrative({ projects, events, comments, start: START, end: END, zone: Z, period });
+let cseq = 0;
+const cm = (project_id: string, author_name: string, body: string, when: Date, extra: Partial<SummaryComment> = {}): SummaryComment => ({
+  id: `c${++cseq}`, project_id, author_name, body, parent_id: null, created_at: when, deleted_at: null, ...extra,
+});
 const text = (p: { prefix: string; name: string; suffix: string; sentences: string[] }) => `${p.prefix}${p.name}${p.suffix} ${p.sentences.join(" ")}`;
 
 describe("describeInline", () => {
@@ -78,14 +82,11 @@ describe("buildNarrative", () => {
       upd("a", at(10), "status", "in_progress", "blocked"),
       upd("a", at(11), "phase", "Drafting", "Proofing"),
       upd("a", at(12), "progress", "40", "70"),
-      ev("a", at(13), "commented", { field: "comment" }),
-      ev("a", at(14), "commented", { field: "comment" }),
     ];
     const s = run([p], events)[0].projects[0].sentences.join(" ");
     expect(s).toContain("the status changed from In progress to Stuck");
     expect(s).toContain('the phase moved from "Drafting" to "Proofing"');
     expect(s).toContain("progress went from 40% to 70%");
-    expect(s).toContain("2 new comments were added");
   });
 
   it("rebuilds the start of a past week, so it reports that week's changes rather than today's", () => {
@@ -127,5 +128,103 @@ describe("buildNarrative", () => {
     const out = run([proj("a", "Alpha"), proj("b", "Beta", { status: "blocked" })]);
     expect(out[0].projects.map((p) => p.name)).toEqual(["Beta", "Alpha"]);
     expect(run([])).toEqual([]);
+  });
+});
+
+describe("comments in the write-up", () => {
+  const p = () => proj("a", "Menu refresh");
+  it("quotes what a comment said, with who said it; replies say 'replied'", () => {
+    const out = run([p()], [], "this week", [
+      cm("a", "Alex Kim", "Proofs arrive Friday", at(10)),
+      cm("a", "Sam Rivera", "Great, thanks", at(11), { parent_id: "c1" }),
+    ]);
+    const s = out[0].projects[0].sentences;
+    expect(s).toContain("Alex Kim commented: “Proofs arrive Friday”.");
+    expect(s).toContain("Sam Rivera replied: “Great, thanks”.");
+  });
+
+  it("shows only the three latest, and says how many earlier ones are left out", () => {
+    const many = [1, 2, 3, 4, 5].map((i) => cm("a", "Alex Kim", `Note ${i}`, at(i)));
+    const s = run([p()], [], "this week", many)[0].projects[0].sentences.join(" ");
+    expect(s).toContain("2 earlier comments are not shown here.");
+    expect(s).toContain("“Note 3”");
+    expect(s).toContain("“Note 5”");
+    expect(s).not.toContain("“Note 2”");
+  });
+
+  it("leaves out deleted comments, blank ones, and ones outside the period", () => {
+    const s = run([p()], [], "this week", [
+      cm("a", "Alex Kim", "", at(3), { deleted_at: at(4) }),
+      cm("a", "Alex Kim", "   ", at(5)),
+      cm("a", "Alex Kim", "Too early", before(5)),
+      cm("a", "Alex Kim", "Too late", new Date(END.getTime() + 3600_000)),
+    ])[0].projects[0].sentences.join(" ");
+    expect(s).not.toMatch(/commented|replied|earlier comment/);
+  });
+
+  it("puts one comment on one line and shortens a long one at a word", () => {
+    expect(quoteText("line one\n\nline   two")).toBe("“line one line two”");
+    expect(quoteText("He said “hello” to them")).toBe('“He said "hello" to them”');
+    const long = quoteText(`${"word ".repeat(80)}`);
+    expect(long.length).toBeLessThanOrEqual(206);
+    expect(long).toMatch(/…”$/);
+  });
+});
+
+describe("sentence quality check", () => {
+  it("accepts well-formed sentences and flags broken ones", () => {
+    for (const ok of ["Sam is working on Menu.", "Next step: Send it.", "Alex Kim commented: “Looks good”.", "Is it ready?", "It was finished this week."]) {
+      expect(sentenceProblem(ok), ok).toBeNull();
+    }
+    expect(sentenceProblem("")).toBe("empty");
+    expect(sentenceProblem("lowercase start.")).toMatch(/capital/);
+    expect(sentenceProblem("No ending")).toMatch(/punctuation/);
+    expect(sentenceProblem("Progress is NaN% done.")).toMatch(/placeholder/);
+    expect(sentenceProblem("The phase is \"undefined\".")).toMatch(/placeholder/);
+    expect(sentenceProblem("Progress is undefined%.")).toMatch(/placeholder/);
+    expect(sentenceProblem("Shows [object Object].")).toMatch(/placeholder/);
+    expect(sentenceProblem("Said: “open quote.")).toMatch(/quotes/);
+    expect(sentenceProblem("Said: “”.")).toMatch(/empty quotes/);
+    expect(sentenceProblem("Two  spaces.")).toMatch(/spaces/);
+  });
+
+  it("repairs spacing, the first letter and the final period without changing the words", () => {
+    expect(tidySentence("  next   step: send it ")).toBe("Next step: send it.");
+    expect(tidySentence("Done..")).toBe("Done.");
+    expect(tidySentence("Done?")).toBe("Done?");
+  });
+
+  // Generated projects with awkward text: empty and odd values, quotes, newlines, long text, other scripts.
+  it("never produces a broken sentence, whatever people typed (generated cases)", () => {
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
+    const pick = <T,>(xs: T[]) => xs[Math.floor(rnd() * xs.length)];
+    const texts = ["", " ", "plain words", "ends with period.", "Ends with question?", "lowercase start", "UPPER CASE", "has “curly” quotes", 'has "straight" quotes', "unbalanced “quote",
+      "line one\nline two", "tabs\tand   spaces", "trailing comma,", "semi;", "ellipsis…", "x".repeat(400), "word ".repeat(120), "Ünïcödé テスト", "😀 emoji", "(parenthetical)", "-- dashes --", "12345", "null", "undefined?", "a"];
+    const statuses = ["not_started", "in_progress", "blocked", "done", "cancelled"];
+    const names = ["Sam Rivera", "alex kim", "Jo", "Demo Admin (synthetic)", "Zoë Müller"];
+    for (let round = 0; round < 40; round++) {
+      const projects: ProjectRow[] = [];
+      const events: EventRow[] = [];
+      const comments: SummaryComment[] = [];
+      for (let i = 0; i < 6; i++) {
+        const id = `p${round}-${i}`;
+        const status = pick(statuses);
+        const assignees = rnd() < 0.5 ? [] : [{ id: `u${Math.floor(rnd() * 3)}`, name: pick(names) }];
+        projects.push(proj(id, pick(texts) || "Untitled", {
+          status, description: pick(texts), phase: pick(texts).slice(0, 24), progress: Math.floor(rnd() * 101), next_step: pick(texts),
+          deadline: rnd() < 0.5 ? null : pick(["2026-10-10", "2026-10-21", "2026-10-23", "2026-12-01"]),
+          created_at: rnd() < 0.3 ? at(Math.floor(rnd() * 50)) : before(100), created_by: `c${i % 2}`, creator_name: pick(names), assignees,
+          archived_at: rnd() < 0.1 ? at(1) : null,
+        }));
+        if (rnd() < 0.5) events.push(upd(id, at(20), "status", pick(statuses), status));
+        if (rnd() < 0.5) events.push(upd(id, at(21), "progress", String(Math.floor(rnd() * 100)), "50"));
+        if (rnd() < 0.5) events.push(upd(id, at(22), "phase", pick(texts).slice(0, 24), pick(texts).slice(0, 24)));
+        for (let k = 0; k < Math.floor(rnd() * 6); k++) comments.push(cm(id, pick(names), pick(texts), at(Math.floor(rnd() * 60)), { parent_id: rnd() < 0.3 ? "x" : null }));
+      }
+      const out = run(projects, events, pick(["this week", "that week"]), comments);
+      expect(narrativeProblems(out), `round ${round}`).toEqual([]);
+      for (const person of out) for (const pr of person.projects) expect(`${pr.prefix}${pr.name}${pr.suffix}`.trim().length).toBeGreaterThan(0);
+    }
   });
 });

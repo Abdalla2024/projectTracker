@@ -21,12 +21,12 @@ function colorAt(t: number): string {
   return "rgb(34,197,94)";
 }
 
-export function StatusRing({ status, progress, phase, size = 104 }: { status: string; progress: number; phase?: string; size?: number }) {
+export function StatusRing({ status, progress, size = 104 }: { status: string; progress: number; size?: number }) {
   // A finished project always shows a full ring; otherwise the slider value decides.
   const pct = status === "done" ? 100 : Math.max(0, Math.min(100, progress));
   const cancelled = status === "cancelled";
   const stroke = Math.round(size * 0.115);
-  const label = phase?.trim() || STATUS_LABELS[status] || status;
+  const label = STATUS_LABELS[status] ?? status;
   const sizeClass = label.length > 17 ? "xs" : label.length > 10 ? "sm" : "";
   const style = {
     "--size": `${size}px`, "--stroke": `${stroke}px`, "--pct": pct,

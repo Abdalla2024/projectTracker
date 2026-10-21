@@ -89,12 +89,11 @@ export default async function ProjectsPage({
                   scroll={false}
                   aria-expanded={open}
                 >
-                  <StatusRing status={p.status} progress={p.progress} phase={p.phase} />
+                  <StatusRing status={p.status} progress={p.progress} />
                   <div className="project-main">
                     <span className="title">{p.name}</span>
-                    {p.next_step ? <span className="hint">Next: {p.next_step}</span> : null}
+                    {p.phase ? <span className="phase">{p.phase}</span> : null}
                     <span className="tags">
-                      <span className={`chip ${p.status}`}>{STATUS_LABELS[p.status]}</span>
                       <span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]} priority</span>
                       {p.archived_at ? <span className="chip">archived</span> : null}
                       {p.deadline ? <span className={`chip ${overdue ? "bad" : ""}`}>{overdue ? "Overdue · " : "Due "}{formatDate(p.deadline)}</span> : null}
