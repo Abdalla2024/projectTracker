@@ -101,3 +101,35 @@ describe("sections and tasks", () => {
     await expect(owner.query("insert into tasks (project_id, title, created_by) values ($1,'x',$2)", [p1, m1])).rejects.toThrow(/no acting user/);
   });
 });
+
+describe("progress follows tasks (migration 010)", () => {
+  let p: string;
+  const progress = async () => (await owner.query("select progress from projects where id = $1", [p])).rows[0].progress as number;
+  const add = (title: string) => asUser(m1, async (c) => (await c.query("insert into tasks (project_id, title, created_by) values ($1,$2,$3) returning id", [p, title, m1])).rows[0].id as string);
+
+  it("keeps the manual value while a project has no tasks", async () => {
+    p = await createProject(m1, "Auto progress");
+    await asUser(m1, (c) => c.query("update projects set progress = 30 where id = $1", [p]));
+    expect(await progress()).toBe(30);
+  });
+
+  it("becomes the share of top-level tasks done, and moves as tasks are ticked off", async () => {
+    const a = await add("One"); const b = await add("Two"); await add("Three"); await add("Four");
+    expect(await progress()).toBe(0);
+    await asUser(m2, (c) => c.query("update tasks set completed_at = now() where id = $1", [a]));
+    expect(await progress()).toBe(25);
+    await asUser(m2, (c) => c.query("update tasks set completed_at = now() where id = $1", [b]));
+    expect(await progress()).toBe(50);
+    // Subtasks do not count.
+    await asUser(m1, (c) => c.query("insert into tasks (project_id, parent_id, title, created_by) values ($1,$2,'sub',$3)", [p, a, m1]));
+    expect(await progress()).toBe(50);
+    // A manual value cannot override it while tasks exist.
+    await asUser(m1, (c) => c.query("update projects set progress = 90 where id = $1", [p]));
+    expect(await progress()).toBe(50);
+    // Reopening moves it back; the change is in the history.
+    await asUser(m2, (c) => c.query("update tasks set completed_at = null where id = $1", [b]));
+    expect(await progress()).toBe(25);
+    const ev = (await owner.query("select old_value, new_value from project_events where project_id = $1 and field = 'progress' order by id", [p])).rows;
+    expect(ev.at(-1)).toEqual({ old_value: "50", new_value: "25" });
+  });
+});

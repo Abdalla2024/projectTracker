@@ -36,10 +36,10 @@ describe("nightly reports", () => {
     await expect(add(m2, loc, "2026-10-20")).rejects.toThrow(/duplicate key/);
   });
 
-  it("members see only their own reports; admins see all", async () => {
+  it("every active member sees every report (migration 010); a disabled user sees none", async () => {
     await add(m2, loc, "2026-10-19", { sales: 999 });
-    const mine = await asUser(m1, (c) => c.query("select report_date::text d from nightly_reports"));
-    expect(mine.rows).toEqual([{ d: "2026-10-20" }]);
+    const all = await asUser(m1, (c) => c.query("select report_date::text d from nightly_reports order by 1"));
+    expect(all.rows).toEqual([{ d: "2026-10-19" }, { d: "2026-10-20" }]);
     expect((await asUser(admin, (c) => c.query("select * from nightly_reports"))).rowCount).toBe(2);
     expect((await asUser(gone, (c) => c.query("select * from nightly_reports"))).rowCount).toBe(0);
   });
