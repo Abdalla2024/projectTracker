@@ -15,7 +15,8 @@
 | See every project, task, comment, history | ❌ | ✅ | ✅ |
 | Create a project, edit any project's details | ❌ | ✅ (creator = self) | ✅ |
 | Assign / unassign people (projects and tasks) | ❌ | ✅ | ✅ |
-| Add, edit, complete, delete tasks and sections | ❌ | ✅ | ✅ |
+| Add, edit, complete, delete, reorder tasks and sections; assign several people to a task | ❌ | ✅ | ✅ |
+| Set a project's status | ❌ | Only the Stuck or Cancelled flag; otherwise it follows the tasks | Same |
 | Archive / restore a project | ❌ | Projects they created | Any |
 | Comment and reply | ❌ | ✅ (as themselves) | ✅ |
 | Edit or delete a comment | ❌ | Their own only | Their own only |
@@ -32,7 +33,7 @@ Disabled accounts see and change nothing. Everyone signed in seeing sales was th
 
 ## Where each rule is enforced
 
-1. **Database (authoritative)** — [db/migrations](../db/migrations) (002 for the base rules, 008 for the shared workspace, 009 for nightly reports, 010 for open reports and task-based progress): row-level security policies decide which rows each user can read or write; triggers restrict archiving to the creator or an admin, keep tasks inside their project, stamp creators, assigners, completers and editors, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE; comments can be changed only by their author, through migration 007).
+1. **Database (authoritative)** — [db/migrations](../db/migrations) (002 for the base rules, 008 for the shared workspace, 009 for nightly reports, 010-012 for open reports and task-driven status, phase and progress): row-level security policies decide which rows each user can read or write; triggers restrict archiving to the creator or an admin, keep tasks inside their project, stamp creators, assigners, completers and editors, and write the history; privileges are narrow (no DELETE on projects/comments/history, column-limited INSERT/UPDATE; comments can be changed only by their author, through migration 007).
 2. **Server code** — server actions re-check the signed-in user and limit what each form may send.
 3. **Interface** — hides controls the user can't use. This is convenience only.
 

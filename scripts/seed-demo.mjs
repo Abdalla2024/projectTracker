@@ -34,7 +34,7 @@ const demoUsers = [
   { key: "m3", email: `demo.member3@${DEMO_DOMAIN}`, name: "Demo Member Three (synthetic)" },
 ];
 
-const triggerTables = ["projects", "project_events", "comments", "project_assignees", "tasks", "sections", "nightly_reports"];
+const triggerTables = ["projects", "project_events", "comments", "project_assignees", "tasks", "sections", "nightly_reports", "task_assignees"];
 const DEMO_PREFIX = "[DEMO] ";
 
 async function resetDemo() {
@@ -186,11 +186,16 @@ try {
 
   // 9. Sections and tasks (Asana-style), with a few finished this week.
   const T = {};
-  const task = async (c, pid, title, extra = {}) =>
-    (await c.query(
-      `insert into tasks (project_id, section_id, parent_id, title, assignee_id, due_date, created_by, sort_order)
-       values ($1,$2,$3,$4,$5,$6,app_user_id(), coalesce((select max(sort_order) + 1 from tasks where project_id = $1), 0)) returning id`,
-      [pid, extra.section ?? null, extra.parent ?? null, title, extra.who ? id[extra.who] : null, extra.due ?? null])).rows[0].id;
+  const task = async (c, pid, title, extra = {}) => {
+    const tid = (await c.query(
+      `insert into tasks (project_id, section_id, parent_id, title, due_date, created_by, sort_order)
+       values ($1,$2,$3,$4,$5,app_user_id(), coalesce((select max(sort_order) + 1 from tasks where project_id = $1), 0)) returning id`,
+      [pid, extra.section ?? null, extra.parent ?? null, title, extra.due ?? null])).rows[0].id;
+    for (const who of [extra.who, ...(extra.also ?? [])].filter(Boolean)) {
+      await c.query("insert into task_assignees (task_id, user_id, assigned_by) values ($1, $2, app_user_id())", [tid, id[who]]);
+    }
+    return tid;
+  };
   await step(old(8), "admin", async (c) => {
     const todo = (await c.query("insert into sections (project_id, name, sort_order) values ($1, 'To do', 0) returning id", [P.patio])).rows[0].id;
     const doing = (await c.query("insert into sections (project_id, name, sort_order) values ($1, 'Doing', 1) returning id", [P.patio])).rows[0].id;
@@ -200,12 +205,21 @@ try {
     T.q1 = await task(c, P.patio, "Quote from vendor 1", { parent: T.quotes, who: "m3" });
     T.q2 = await task(c, P.patio, "Quote from vendor 2", { parent: T.quotes, who: "m3" });
     T.draft = await task(c, P.checklist, "Draft the opening checklist", { who: "m1", due: dateIn(-2) });
-    T.trial = await task(c, P.checklist, "Trial on one shift", { who: "m2", due: dateIn(3) });
+    T.trial = await task(c, P.checklist, "Trial on one shift", { who: "m2", also: ["m1"], due: dateIn(3) });
+    T.share = await task(c, P.checklist, "Share with all locations", { who: "m1", due: dateIn(9) });
     T.print = await task(c, P.catering, "Get print proofs", { who: "m2", due: dateIn(-3) });
     T.walk = await task(c, P.fellow, "Run a staff walkthrough", { who: "m1", due: dateIn(2) });
     T.train = await task(c, P.fellow, "Write a one-page how-to", { who: "m1", due: dateIn(6) });
+    T.setup = await task(c, P.fellow, "Set up the tracker", { who: "admin" });
+    T.soap1 = await task(c, P.soap, "List the options", { who: "m3" });
+    T.soap2 = await task(c, P.soap, "Compare prices", { who: "m3", due: dateIn(2) });
+    T.soap3 = await task(c, P.soap, "Pick one", { who: "m3", due: dateIn(4) });
+    T.al1 = await task(c, P.allergen, "Draft the templates", { who: "m1" });
+    T.al2 = await task(c, P.allergen, "Send final files", { who: "m1" });
   });
+  await step(old(6), "admin", (c) => c.query("update tasks set completed_at = now() where id = any($1)", [[T.setup, T.soap1, T.al1]]));
   await step(week(0.3), "m1", (c) => c.query("update tasks set completed_at = now() where id = $1", [T.draft]));
+  await step(week(0.6), "m1", (c) => c.query("update tasks set completed_at = now() where id = $1", [T.al2]));
   await step(week(0.4), "m3", (c) => c.query("update tasks set completed_at = now() where id = any($1)", [[T.q1]]));
   await step(week(0.5), "m2", (c) => c.query("update tasks set completed_at = now() where id = $1", [T.measure]));
 

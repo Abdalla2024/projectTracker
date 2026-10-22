@@ -240,8 +240,9 @@ export async function loadSummaryData(userId: string, since: Date): Promise<{ pr
     ).rows as EventRow[];
     const tasks = (
       await c.query(
-        `select k.id, k.project_id, k.title, k.parent_id, k.due_date::text as due_date, k.completed_at, pr.display_name as assignee_name
-         from tasks k left join profiles pr on pr.id = k.assignee_id`,
+        `select k.id, k.project_id, k.title, k.parent_id, k.due_date::text as due_date, k.completed_at,
+                (select string_agg(pr.display_name, ', ' order by pr.display_name) from task_assignees ta join profiles pr on pr.id = ta.user_id where ta.task_id = k.id) as assignee_name
+         from tasks k`,
       )
     ).rows as SummaryTask[];
     const comments = (

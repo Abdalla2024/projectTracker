@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requestLoginCode, requireUser, signInWithPassword, signOut, signUpWithCode } from "@/lib/auth";
-import { PHASE_MAX, PRIORITIES, STATUSES } from "@/lib/constants";
+import { PRIORITIES, STATUSES } from "@/lib/constants";
 import {
   NotAllowedError, addComment, createProject, deleteComment, editComment, getProjectDetail, isUuid, setArchived, setAssignees, updateProject,
 } from "@/lib/projects";
@@ -74,9 +74,6 @@ const fields = {
   description: z.string().trim().max(5000),
   priority: z.enum(PRIORITIES),
   deadline: optionalDate,
-  next_step: z.string().trim().max(500),
-  phase: z.string().trim().max(PHASE_MAX, `The phase can be at most ${PHASE_MAX} characters.`),
-  progress: z.coerce.number().int().min(0).max(100),
   location_id: z.union([z.literal(""), z.uuid()]).transform((v) => (v === "" ? null : v)),
   team_id: z.union([z.literal(""), z.uuid()]).transform((v) => (v === "" ? null : v)),
 };
@@ -84,19 +81,18 @@ const fields = {
 export async function createProjectAction(formData: FormData) {
   const user = await requireUser();
   const parsed = z
-    .object({ ...fields, status: z.enum(STATUSES) })
+    .object(fields)
     .safeParse({
       name: str(formData, "name"), description: str(formData, "description"), priority: str(formData, "priority"),
-      deadline: str(formData, "deadline"), next_step: str(formData, "next_step"), status: str(formData, "status"),
-      phase: str(formData, "phase"), progress: str(formData, "progress") || "0",
-      location_id: str(formData, "location_id"), team_id: str(formData, "team_id"),
+      deadline: str(formData, "deadline"), location_id: str(formData, "location_id"), team_id: str(formData, "team_id"),
     });
   if (!parsed.success) redirect(`/?new=1&error=${enc(parsed.error.issues[0].message)}`);
 
   let id = "";
   await attempt("/?new=1", async () => {
+    // Status, phase and progress start empty and are then computed from the tasks by the database.
     id = await createProject(user, {
-      ...parsed.data, assigneeIds: ids(formData, "assignees"),
+      ...parsed.data, status: "not_started", next_step: "", phase: "", progress: 0, assigneeIds: ids(formData, "assignees"),
       taskTitles: formData.getAll("task_titles").map((t) => String(t).trim().slice(0, 300)).filter(Boolean).slice(0, 50),
     });
   });
@@ -112,9 +108,10 @@ export async function updateProjectAction(formData: FormData) {
   // Shared workspace: everyone active may edit every field (the database enforces who may archive).
   const project = await getProjectDetail(user.id, id);
   if (!project) redirect("/");
-  const schema = z.object({ ...fields, status: z.enum(STATUSES) });
+  // Status is automatic unless flagged Stuck or Cancelled; "auto" hands it back to the database.
+  const schema = z.object({ ...fields, status: z.enum(["auto", "blocked", "cancelled"]).transform((v) => (v === "auto" ? "not_started" : v)) });
   const raw = Object.fromEntries(
-    ["name", "description", "priority", "deadline", "next_step", "status", "phase", "progress", "location_id", "team_id"].map((k) => [k, str(formData, k)]),
+    ["name", "description", "priority", "deadline", "status", "location_id", "team_id"].map((k) => [k, str(formData, k)]),
   );
   const parsed = schema.safeParse(raw);
   if (!parsed.success) redirect(`${back}&error=${enc(parsed.error.issues[0].message)}#p-${id}`);
@@ -168,16 +165,4 @@ export async function archiveAction(formData: FormData) {
   if (!isUuid(id)) redirect("/");
   await attempt(`/?open=${id}`, () => setArchived(user.id, id, str(formData, "archive") === "1"));
   redirect(`/?open=${id}&saved=1#p-${id}`);
-}
-
-/** Board view: drag a project card to another status column. Returns an error message, or null. */
-export async function setProjectStatusAction(id: string, status: string): Promise<string | null> {
-  const user = await requireUser();
-  if (!isUuid(id) || !(STATUSES as readonly string[]).includes(status)) return "That move isn't valid.";
-  try {
-    await updateProject(user.id, id, { status });
-    return null;
-  } catch (e) {
-    return friendly(e);
-  }
 }

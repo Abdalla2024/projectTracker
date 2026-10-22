@@ -5,7 +5,7 @@ import { NewProjectModal } from "@/app/components/NewProjectModal";
 import { ProjectBoard, type BoardCard } from "@/app/components/ProjectBoard";
 import { ProjectDetail } from "@/app/components/ProjectDetail";
 import { StatusRing } from "@/app/components/StatusRing";
-import { PHASE_MAX, PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
+import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 import { listOrg } from "@/lib/org";
 import { getProjectDetail, isUuid, listPeople, listProjects, type ProjectListItem } from "@/lib/projects";
@@ -46,7 +46,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   // Everything except the status tab narrows the list; the tab counts are computed after it.
   const scoped = projects.filter((p) =>
     (!location || p.location_id === location) && (!team || p.team_id === team) &&
-    (!q || p.name.toLowerCase().includes(q) || p.phase.toLowerCase().includes(q) || p.next_step.toLowerCase().includes(q)));
+    (!q || p.name.toLowerCase().includes(q) || p.phase.toLowerCase().includes(q)));
   const countOf = (key: string) => (key === "all" ? scoped.length : scoped.filter((p) => p.status === key).length);
   const shown = filter === "all" || view === "board" ? scoped : scoped.filter((p) => p.status === filter);
   const isOverdue = (p: ProjectListItem) => !["done", "cancelled"].includes(p.status) && !p.archived_at && !!p.deadline && p.deadline < today;
@@ -129,9 +129,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
           locations={activeLocations.map(({ id, name }) => ({ id, name }))}
           teams={activeTeams.map(({ id, name }) => ({ id, name }))}
           defaultLocation={location} defaultTeam={team}
-          statuses={STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
           priorities={PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] }))}
-          phaseMax={PHASE_MAX}
           defaultOpen={modalOpen}
           error={modalOpen ? sp.error : undefined}
         />

@@ -163,3 +163,15 @@ describe("tasks drive status, current phase and progress (migrations 010-011)", 
     for (const f of ["status", "phase", "progress"]) expect(ev).toContain(f);
   });
 });
+
+describe("one-time catch-up (migration 012)", () => {
+  it("re-applying it leaves computed values unchanged and adds no history", async () => {
+    const before = (await owner.query("select id, status, phase, progress from projects order by id")).rows;
+    const events = (await owner.query("select count(*)::int n from project_events")).rows[0].n;
+    const fs = await import("node:fs");
+    const sql = fs.readFileSync(new URL("../db/migrations/012_recompute_projects.sql", import.meta.url), "utf8");
+    await owner.query(sql);
+    expect((await owner.query("select id, status, phase, progress from projects order by id")).rows).toEqual(before);
+    expect((await owner.query("select count(*)::int n from project_events")).rows[0].n).toBe(events);
+  });
+});

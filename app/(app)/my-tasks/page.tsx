@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { DateTime } from "luxon";
 import { Alerts } from "@/app/components/Alerts";
-import { toggleTaskAction } from "@/app/task-actions";
-import { DueChip } from "@/app/components/TaskPanel";
+import { DueChip, TaskCheck } from "@/app/components/TaskCheck";
 import { requireUser } from "@/lib/auth";
 import { listMyTasks, type TaskWithProject } from "@/lib/tasks";
 import { localDateString, timeZone } from "@/lib/time";
@@ -32,20 +31,13 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       {buckets.map((b) => (
         <section key={b.key} className={`card bucket ${b.key}`}>
           <h2>{b.label}<span className="count">{b.items.length}</span></h2>
-          <ul className="task-list">
+          <ul className="tlist">
             {b.items.map((t) => (
-              <li key={t.id} className={`task${t.completed_at ? " done" : ""}`}>
-                <div className="task-line">
-                  <form action={toggleTaskAction} className="check-form">
-                    <input type="hidden" name="task_id" value={t.id} />
-                    <input type="hidden" name="done" value={t.completed_at ? "0" : "1"} />
-                    <input type="hidden" name="back" value="/my-tasks" />
-                    <button type="submit" className={`check${t.completed_at ? " on" : ""}`} aria-label={t.completed_at ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg>
-                    </button>
-                  </form>
-                  <span className="task-title">{t.title}</span>
-                  <span className="task-meta">
+              <li key={t.id} className={`trow${t.completed_at ? " done" : ""}`}>
+                <div className="tline">
+                  <TaskCheck id={t.id} title={t.title} done={!!t.completed_at} />
+                  <span className="ttitle static">{t.title}</span>
+                  <span className="tmeta">
                     <Link className="chip project-link" href={`/?open=${t.project_id}#tasks-${t.project_id}`}>{t.project_name}</Link>
                     {t.location_name ? <span className="chip">{t.location_name}</span> : null}
                     <DueChip date={t.due_date} done={!!t.completed_at} today={today} />

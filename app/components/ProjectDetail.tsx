@@ -1,8 +1,7 @@
 import { archiveAction, assignAction, commentAction, deleteCommentAction, editCommentAction, updateProjectAction } from "@/app/actions";
 import { Alerts } from "@/app/components/Alerts";
-import { TaskPanel } from "@/app/components/TaskPanel";
-import { ProgressField } from "@/app/components/ProgressField";
-import { PHASE_MAX, PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "@/lib/constants";
+import { TaskList } from "@/app/components/TaskList";
+import { PRIORITIES, PRIORITY_LABELS, STATUS_LABELS } from "@/lib/constants";
 import type { SessionUser } from "@/lib/auth";
 import { describeEvent } from "@/lib/format";
 import type { CommentRow, getProjectDetail, listPeople } from "@/lib/projects";
@@ -71,8 +70,10 @@ export function ProjectDetail({
 }: { project: Project; tasks: Tasks; user: SessionUser; people: People; locations: Unit[]; teams: Unit[]; zone: string; today: string; error?: string; saved?: string }) {
   // Shared workspace: everyone edits; archiving stays with the creator or an admin (enforced in the database).
   const canArchive = user.role === "admin" || project.created_by === user.id;
-  // With tasks, the database sets progress from them; the slider only applies to projects without tasks.
-  const fromTasks = tasks.tasks.some((t) => !t.parent_id);
+  // Status, current phase and progress are computed by the database from the tasks.
+  const topTasks = tasks.tasks.filter((t) => !t.parent_id);
+  const doneTasks = topTasks.filter((t) => t.completed_at).length;
+  const flag = project.status === "blocked" || project.status === "cancelled" ? project.status : "auto";
   const assigned = new Set(project.assignees.map((a) => a.id));
   const id = project.id;
   const top = project.comments.filter((c) => !c.parent_id);
@@ -83,7 +84,10 @@ export function ProjectDetail({
   return (
     <div className="detail" id={`d-${id}`}>
       <Alerts error={error} saved={saved} />
-      <TaskPanel projectId={id} sections={tasks.sections} tasks={tasks.tasks} people={people} today={today} />
+      <TaskList projectId={id} today={today}
+        sections={tasks.sections.map(({ id, name }) => ({ id, name }))}
+        people={people.map(({ id, name }) => ({ id, name }))}
+        tasks={tasks.tasks.map((t) => ({ ...t, completed_at: t.completed_at ? new Date(t.completed_at).toISOString() : null }))} />
       <div className="detail-cols">
         <div>
           <section className="sub">
@@ -91,11 +95,10 @@ export function ProjectDetail({
             <dl className="details">
               <dt>Created by</dt><dd>{project.creator_name}, {formatDateTime(project.created_at, zone)}</dd>
               {project.assignees.length ? <><dt>Assigned to</dt><dd>{project.assignees.map((a) => a.name).join(", ")}</dd></> : null}
-              <dt>Status</dt><dd>{STATUS_LABELS[project.status]}</dd>
-              <dt>Phase</dt><dd>{project.phase || "—"}</dd>
-              <dt>Progress</dt><dd>{project.status === "done" ? 100 : project.progress}%{fromTasks ? " (from tasks)" : ""}</dd>
+              <dt>Status</dt><dd>{STATUS_LABELS[project.status]}{flag === "auto" ? "" : " (set by hand)"}</dd>
+              <dt>Working on</dt><dd>{project.phase || (topTasks.length ? "All tasks done" : "No tasks yet")}</dd>
+              <dt>Progress</dt><dd>{project.progress}%{topTasks.length ? ` · ${doneTasks} of ${topTasks.length} tasks done` : ""}</dd>
               <dt>Deadline</dt><dd>{project.deadline ? formatDate(project.deadline) : "None"}</dd>
-              <dt>Next step</dt><dd>{project.next_step || "—"}</dd>
               <dt>Last updated</dt><dd>{formatDateTime(project.updated_at, zone)}</dd>
             </dl>
             {project.description ? <p className="desc">{project.description}</p> : null}
@@ -125,8 +128,10 @@ export function ProjectDetail({
               </div>
               <div>
                 <label htmlFor={`status-${id}`}>Status</label>
-                <select id={`status-${id}`} name="status" defaultValue={project.status}>
-                  {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                <select id={`status-${id}`} name="status" defaultValue={flag}>
+                  <option value="auto">Automatic, from tasks</option>
+                  <option value="blocked">Stuck</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
               </div>
               <div>
@@ -136,27 +141,11 @@ export function ProjectDetail({
                 </select>
               </div>
               <div>
-                <label htmlFor={`phase-${id}`}>Current phase</label>
-                <input id={`phase-${id}`} name="phase" type="text" maxLength={PHASE_MAX} defaultValue={project.phase} placeholder="e.g. Drafting menu" />
-              </div>
-              <div>
-                <label htmlFor={`progress-${id}`}>Progress</label>
-                {fromTasks ? (
-                  <>
-                    <input type="hidden" name="progress" value={project.progress} />
-                    <p className="auto-progress">{project.progress}%, from the tasks above. Tick tasks off to move it.</p>
-                  </>
-                ) : <ProgressField id={`progress-${id}`} defaultValue={project.progress} />}
-              </div>
-              <div>
                 <label htmlFor={`deadline-${id}`}>Deadline</label>
                 <input id={`deadline-${id}`} name="deadline" type="date" defaultValue={project.deadline ?? ""} />
               </div>
-              <div>
-                <label htmlFor={`next-${id}`}>Next step</label>
-                <input id={`next-${id}`} name="next_step" type="text" maxLength={500} defaultValue={project.next_step} />
-              </div>
             </div>
+            <p className="hint">Status, current phase and progress come from the tasks above. Use Stuck or Cancelled only when the tasks can&apos;t tell the story.</p>
             <p><button type="submit">Save changes</button></p>
           </form>
 
@@ -199,13 +188,29 @@ export function ProjectDetail({
 
           <section className="sub">
             <h3>History</h3>
-            <ul className="plain">
-              {project.events.map((e) => (
+            {(() => {
+              // Progress, phase and status changes that the database makes after a task change repeat what the
+              // task entry already says; hide them here (they stay in the history and the weekly summary).
+              const auto = new Set(["progress", "phase", "status"]);
+              const shown = project.events.filter((e) => !(e.event_type === "updated" && auto.has(e.field ?? "") &&
+                project.events.some((t) => t.event_type.startsWith("task_") && Math.abs(new Date(t.occurred_at).getTime() - new Date(e.occurred_at).getTime()) < 1000)));
+              const item = (e: (typeof shown)[number]) => (
                 <li key={String(e.id)}>
                   <span className="muted">{formatDateTime(e.occurred_at, zone)}</span> · <b>{e.actor_name}</b> {describeEvent(e)}
                 </li>
-              ))}
-            </ul>
+              );
+              return (
+                <>
+                  <ul className="plain">{shown.slice(0, 6).map(item)}</ul>
+                  {shown.length > 6 ? (
+                    <details className="more-history">
+                      <summary>Show all {shown.length} entries</summary>
+                      <ul className="plain">{shown.slice(6).map(item)}</ul>
+                    </details>
+                  ) : null}
+                </>
+              );
+            })()}
           </section>
 
           {canArchive ? (

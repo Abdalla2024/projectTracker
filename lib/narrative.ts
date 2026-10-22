@@ -153,16 +153,15 @@ export function buildNarrative(input: {
       if (completed) {
         sentences.push(`It was finished ${period}.`);
       } else {
-        if (s1.phase) sentences.push(`${firstName(member.name)} is currently working on the "${plain(s1.phase)}" phase (${s1.progress}% complete).`);
+        if (s1.phase) sentences.push(`${firstName(member.name)} is currently working on "${plain(s1.phase)}" (${s1.progress}% complete).`);
         else if (s1.progress > 0) sentences.push(`The project is ${s1.progress}% complete.`);
         if (s1.status === "blocked") sentences.push("The project is currently stuck.");
         else if (s1.status === "not_started" && !s1.phase && s1.progress === 0) sentences.push("It has not started yet.");
-        if (s1.next_step) sentences.push(`Next step: ${endSentence(plain(s1.next_step))}`);
       }
 
       const moved: string[] = [];
       if (s0 && s0.status !== s1.status && !completed) moved.push(`the status changed from ${label(s0.status)} to ${label(s1.status)}`);
-      if (s0 && s0.phase !== s1.phase && s1.phase) moved.push(`the phase moved ${s0.phase ? `from "${plain(s0.phase)}" ` : ""}to "${plain(s1.phase)}"`);
+      if (s0 && s0.phase !== s1.phase && s1.phase) moved.push(`the current task moved ${s0.phase ? `from "${plain(s0.phase)}" ` : ""}to "${plain(s1.phase)}"`);
       if (s0 && s0.progress !== s1.progress) moved.push(`progress went from ${s0.progress}% to ${s1.progress}%`);
       if (s0 === null) moved.unshift("the project was created");
       if (moved.length) sentences.push(`${period[0].toUpperCase()}${period.slice(1)}, ${list(moved)}.`);

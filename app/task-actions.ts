@@ -1,16 +1,14 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+// Task changes called straight from the task list (no page navigation). Each returns an error
+// message or null; the list then refreshes the page data so the project's ring, status and current
+// phase (computed by the database) update immediately.
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { NotAllowedError, isUuid } from "@/lib/projects";
-import { createSection, createTask, deleteSection, deleteTask, renameSection, setTaskDone, updateTask } from "@/lib/tasks";
+import { createSection, createTask, deleteSection, deleteTask, moveTask, renameSection, setTaskDone, updateTask } from "@/lib/tasks";
 
-const str = (f: FormData, k: string) => String(f.get(k) ?? "");
-const optId = (v: string) => (isUuid(v) ? v : null);
-const optDate = z.union([z.literal(""), z.iso.date()]).transform((v) => (v === "" ? null : v));
-const enc = encodeURIComponent;
+type Result = string | null;
 
 function friendly(err: unknown): string {
   const code = (err as { code?: string })?.code;
@@ -20,89 +18,76 @@ function friendly(err: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-/** Run a change, then go back to the open project (with an error message if it failed). */
-async function run(projectId: string, fn: () => Promise<void>, back?: string) {
-  let error: string | null = null;
-  try { await fn(); } catch (e) { error = friendly(e); }
-  const to = back || `/?open=${projectId}`;
-  redirect(`${to}${to.includes("?") ? "&" : "?"}${error ? `error=${enc(error)}` : "t=1"}#tasks-${projectId}`);
+async function run(fn: () => Promise<unknown>): Promise<Result> {
+  try { await fn(); return null; } catch (e) { return friendly(e); }
 }
 
-export async function addTaskAction(formData: FormData) {
+const id = z.uuid();
+const optId = z.union([z.uuid(), z.null()]);
+const ids = z.array(z.uuid()).max(50);
+const title = z.string().trim().min(1, "Give the task a name.").max(300);
+const date = z.union([z.iso.date(), z.null()]);
+
+export async function toggleTask(taskId: string, done: boolean): Promise<Result> {
   const user = await requireUser();
-  const projectId = str(formData, "project_id");
-  if (!isUuid(projectId)) redirect("/");
-  const title = z.string().trim().min(1).max(300).safeParse(str(formData, "title"));
-  const due = optDate.safeParse(str(formData, "due_date"));
-  if (!title.success || !due.success) redirect(`/?open=${projectId}&error=${enc("Give the task a title (and a valid date).")}#tasks-${projectId}`);
-  await run(projectId, () => createTask(user.id, projectId, {
-    title: title.data, due_date: due.data,
-    section_id: optId(str(formData, "section_id")), parent_id: optId(str(formData, "parent_id")), assignee_id: optId(str(formData, "assignee_id")),
-  }), str(formData, "back"));
+  if (!isUuid(taskId)) return "That task wasn't found.";
+  return run(() => setTaskDone(user.id, taskId, done));
 }
 
-export async function updateTaskAction(formData: FormData) {
+export async function addTask(input: { projectId: string; title: string; sectionId: string | null; parentId: string | null; assigneeIds: string[]; dueDate: string | null }): Promise<Result> {
   const user = await requireUser();
-  const projectId = str(formData, "project_id");
-  const taskId = str(formData, "task_id");
-  if (!isUuid(projectId) || !isUuid(taskId)) redirect("/");
-  const parsed = z.object({
-    title: z.string().trim().min(1).max(300),
-    notes: z.string().max(5000),
-    due_date: optDate,
-  }).safeParse({ title: str(formData, "title"), notes: str(formData, "notes"), due_date: str(formData, "due_date") });
-  if (!parsed.success) redirect(`/?open=${projectId}&error=${enc("Give the task a title (and a valid date).")}#tasks-${projectId}`);
-  await run(projectId, () => updateTask(user.id, projectId, taskId, {
-    ...parsed.data, assignee_id: optId(str(formData, "assignee_id")), section_id: optId(str(formData, "section_id")),
-  }), str(formData, "back"));
+  const p = z.object({ projectId: id, title, sectionId: optId, parentId: optId, assigneeIds: ids, dueDate: date }).safeParse(input);
+  if (!p.success) return p.error.issues[0].message;
+  return run(() => createTask(user.id, p.data.projectId, {
+    title: p.data.title, section_id: p.data.sectionId, parent_id: p.data.parentId, assigneeIds: p.data.assigneeIds, due_date: p.data.dueDate,
+  }));
 }
 
-export async function toggleTaskAction(formData: FormData) {
+export async function saveTask(input: { projectId: string; taskId: string; title: string; notes: string; assigneeIds: string[]; dueDate: string | null }): Promise<Result> {
   const user = await requireUser();
-  const taskId = str(formData, "task_id");
-  const back = str(formData, "back");
-  if (!isUuid(taskId)) redirect("/");
-  let projectId = "";
-  let error: string | null = null;
-  try { projectId = await setTaskDone(user.id, taskId, str(formData, "done") === "1"); } catch (e) { error = friendly(e); }
-  if (back && !back.startsWith("/?open=")) {
-    revalidatePath(back.split("?")[0]);
-    redirect(`${back}${back.includes("?") ? "&" : "?"}${error ? `error=${enc(error)}` : "t=1"}`);
-  }
-  redirect(`/?open=${projectId}${error ? `&error=${enc(error)}` : ""}#tasks-${projectId}`);
+  const p = z.object({ projectId: id, taskId: id, title, notes: z.string().max(5000), assigneeIds: ids, dueDate: date }).safeParse(input);
+  if (!p.success) return p.error.issues[0].message;
+  return run(() => updateTask(user.id, p.data.projectId, p.data.taskId, {
+    title: p.data.title, notes: p.data.notes, due_date: p.data.dueDate, assigneeIds: p.data.assigneeIds,
+  }));
 }
 
-export async function deleteTaskAction(formData: FormData) {
+export async function setTaskPeople(projectId: string, taskId: string, assigneeIds: string[]): Promise<Result> {
   const user = await requireUser();
-  const projectId = str(formData, "project_id");
-  const taskId = str(formData, "task_id");
-  if (!isUuid(projectId) || !isUuid(taskId)) redirect("/");
-  await run(projectId, () => deleteTask(user.id, projectId, taskId));
+  const p = z.object({ projectId: id, taskId: id, assigneeIds: ids }).safeParse({ projectId, taskId, assigneeIds });
+  if (!p.success) return p.error.issues[0].message;
+  return run(() => updateTask(user.id, p.data.projectId, p.data.taskId, { assigneeIds: p.data.assigneeIds }));
 }
 
-export async function addSectionAction(formData: FormData) {
+export async function removeTask(projectId: string, taskId: string): Promise<Result> {
   const user = await requireUser();
-  const projectId = str(formData, "project_id");
-  if (!isUuid(projectId)) redirect("/");
-  const name = z.string().trim().min(1).max(80).safeParse(str(formData, "name"));
-  if (!name.success) redirect(`/?open=${projectId}&error=${enc("Give the section a name.")}#tasks-${projectId}`);
-  await run(projectId, () => createSection(user.id, projectId, name.data));
+  if (!isUuid(projectId) || !isUuid(taskId)) return "That task wasn't found.";
+  return run(() => deleteTask(user.id, projectId, taskId));
 }
 
-export async function renameSectionAction(formData: FormData) {
+export async function placeTask(projectId: string, taskId: string, sectionId: string | null, beforeId: string | null): Promise<Result> {
   const user = await requireUser();
-  const projectId = str(formData, "project_id");
-  const sectionId = str(formData, "section_id");
-  if (!isUuid(projectId) || !isUuid(sectionId)) redirect("/");
-  const name = z.string().trim().min(1).max(80).safeParse(str(formData, "name"));
-  if (!name.success) redirect(`/?open=${projectId}&error=${enc("Give the section a name.")}#tasks-${projectId}`);
-  await run(projectId, () => renameSection(user.id, projectId, sectionId, name.data));
+  const p = z.object({ projectId: id, taskId: id, sectionId: optId, beforeId: optId }).safeParse({ projectId, taskId, sectionId, beforeId });
+  if (!p.success) return "That move isn't valid.";
+  return run(() => moveTask(user.id, p.data.projectId, p.data.taskId, p.data.sectionId, p.data.beforeId));
 }
 
-export async function deleteSectionAction(formData: FormData) {
+export async function addSection(projectId: string, name: string): Promise<Result> {
   const user = await requireUser();
-  const projectId = str(formData, "project_id");
-  const sectionId = str(formData, "section_id");
-  if (!isUuid(projectId) || !isUuid(sectionId)) redirect("/");
-  await run(projectId, () => deleteSection(user.id, projectId, sectionId));
+  const p = z.object({ projectId: id, name: z.string().trim().min(1, "Give the section a name.").max(80) }).safeParse({ projectId, name });
+  if (!p.success) return p.error.issues[0].message;
+  return run(() => createSection(user.id, p.data.projectId, p.data.name));
+}
+
+export async function renameSectionTo(projectId: string, sectionId: string, name: string): Promise<Result> {
+  const user = await requireUser();
+  const p = z.object({ projectId: id, sectionId: id, name: z.string().trim().min(1, "Give the section a name.").max(80) }).safeParse({ projectId, sectionId, name });
+  if (!p.success) return p.error.issues[0].message;
+  return run(() => renameSection(user.id, p.data.projectId, p.data.sectionId, p.data.name));
+}
+
+export async function removeSection(projectId: string, sectionId: string): Promise<Result> {
+  const user = await requireUser();
+  if (!isUuid(projectId) || !isUuid(sectionId)) return "That section wasn't found.";
+  return run(() => deleteSection(user.id, projectId, sectionId));
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createProjectAction } from "@/app/actions";
-import { ProgressField } from "@/app/components/ProgressField";
 
 interface Props {
   people: { id: string; name: string }[];
@@ -10,17 +9,14 @@ interface Props {
   teams: { id: string; name: string }[];
   defaultLocation?: string | null;
   defaultTeam?: string | null;
-  statuses: { value: string; label: string }[];
   priorities: { value: string; label: string }[];
-  phaseMax: number;
   defaultOpen?: boolean;
   error?: string;
 }
 
-export function NewProjectModal({ people, locations, teams, defaultLocation, defaultTeam, statuses, priorities, phaseMax, defaultOpen, error }: Props) {
+export function NewProjectModal({ people, locations, teams, defaultLocation, defaultTeam, priorities, defaultOpen, error }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [tasks, setTasks] = useState<string[]>([""]);
-  const hasTasks = tasks.some((t) => t.trim());
   const setTask = (i: number, v: string) => setTasks((ts) => ts.map((t, j) => (j === i ? v : t)));
   useEffect(() => {
     if (defaultOpen) ref.current?.showModal();
@@ -60,12 +56,6 @@ export function NewProjectModal({ people, locations, teams, defaultLocation, def
               </select>
             </div>
             <div>
-              <label htmlFor="np-status">Status</label>
-              <select id="np-status" name="status" defaultValue="not_started">
-                {statuses.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-            </div>
-            <div>
               <label htmlFor="np-priority">Priority</label>
               <select id="np-priority" name="priority" defaultValue="normal">
                 {priorities.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -75,22 +65,10 @@ export function NewProjectModal({ people, locations, teams, defaultLocation, def
               <label htmlFor="np-deadline">Deadline (optional)</label>
               <input id="np-deadline" name="deadline" type="date" />
             </div>
-            <div>
-              <label htmlFor="np-next">Next step</label>
-              <input id="np-next" name="next_step" type="text" maxLength={500} />
-            </div>
-            <div>
-              <label htmlFor="np-phase">Current phase</label>
-              <input id="np-phase" name="phase" type="text" maxLength={phaseMax} placeholder="e.g. Drafting menu" />
-            </div>
-            <div>
-              <label htmlFor="np-progress">Progress</label>
-              {hasTasks ? <p className="auto-progress">Follows the tasks below: 0% to start, 100% when all are done.</p> : <ProgressField id="np-progress" />}
-            </div>
           </div>
           <fieldset className="np-tasks">
             <legend>Tasks</legend>
-            <p className="hint">Break the project into steps. People tick them off one at a time and the progress ring moves on its own.</p>
+            <p className="hint">The steps of the project, in order. Ticking them off sets the status, the current phase and the progress ring.</p>
             <ol>
               {tasks.map((t, i) => (
                 <li key={i}>

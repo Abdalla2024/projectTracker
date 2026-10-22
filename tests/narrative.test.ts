@@ -63,7 +63,7 @@ describe("buildNarrative", () => {
     const out = run([proj("a", "Menu refresh", { description: "Update the dinner menu layout", phase: "Drafting copy", progress: 40, next_step: "Send to print" })]);
     expect(out[0].projects).toHaveLength(1);
     expect(text(out[0].projects[0])).toBe(
-      'Sam Rivera is working on Menu refresh. In this project, update the dinner menu layout. Sam is currently working on the "Drafting copy" phase (40% complete). Next step: Send to print.',
+      'Sam Rivera is working on Menu refresh. In this project, update the dinner menu layout. Sam is currently working on "Drafting copy" (40% complete).',
     );
   });
 
@@ -85,7 +85,7 @@ describe("buildNarrative", () => {
     ];
     const s = run([p], events)[0].projects[0].sentences.join(" ");
     expect(s).toContain("the status changed from In progress to Stuck");
-    expect(s).toContain('the phase moved from "Drafting" to "Proofing"');
+    expect(s).toContain('the current task moved from "Drafting" to "Proofing"');
     expect(s).toContain("progress went from 40% to 70%");
   });
 
@@ -95,7 +95,7 @@ describe("buildNarrative", () => {
     const events = [upd("a", at(10), "progress", "10", "50"), upd("a", new Date(END.getTime() + 3600_000), "progress", "50", "90"), upd("a", new Date(END.getTime() + 3600_000), "phase", "Proofing", "Launch")];
     const s = run([p], events, "that week")[0].projects[0].sentences.join(" ");
     expect(s).toContain("(50% complete)");
-    expect(s).toContain('"Proofing" phase');
+    expect(s).toContain('working on "Proofing"');
     expect(s).toContain("progress went from 10% to 50%");
   });
 
