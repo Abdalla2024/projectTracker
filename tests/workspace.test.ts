@@ -56,14 +56,14 @@ describe("sections and tasks", () => {
     s1 = await asUser(m2, async (c) => (await c.query("insert into sections (project_id, name) values ($1, 'To do') returning id", [p1])).rows[0].id);
     s2other = await asUser(m1, async (c) => (await c.query("insert into sections (project_id, name) values ($1, 'Elsewhere') returning id", [p2])).rows[0].id);
     t1 = await asUser(m2, async (c) =>
-      (await c.query("insert into tasks (project_id, section_id, title, assignee_id, due_date, created_by) values ($1,$2,'Order signs',$3,'2026-11-01',$4) returning id", [p1, s1, m1, m2])).rows[0].id);
+      (await c.query("insert into tasks (project_id, section_id, title, due_date, created_by) values ($1,$2,'Order signs','2026-11-01',$3) returning id", [p1, s1, m2])).rows[0].id);
     await expect(asUser(m2, (c) => c.query("insert into tasks (project_id, title, created_by) values ($1,'forged',$2)", [p1, m1]))).rejects.toThrow(/row-level security/);
-    expect((await types(p1)).at(-1)).toMatchObject({ event_type: "task_added", new_value: "Order signs" });
+    expect(await types(p1)).toContainEqual({ event_type: "task_added", field: "task", old_value: null, new_value: "Order signs" });
   });
 
   it("a task cannot point at another project's section, a disabled assignee, or move projects", async () => {
     await expect(asUser(m1, (c) => c.query("update tasks set section_id = $2 where id = $1", [t1, s2other]))).rejects.toThrow(/another project/);
-    await expect(asUser(m1, (c) => c.query("update tasks set assignee_id = $2 where id = $1", [t1, gone]))).rejects.toThrow(/disabled/);
+    await expect(asUser(m1, (c) => c.query("insert into task_assignees (task_id, user_id, assigned_by) values ($1,$2,$3)", [t1, gone, m1]))).rejects.toThrow(/disabled/);
     await expect(asUser(m1, (c) => c.query("update tasks set project_id = $2 where id = $1", [t1, p2]))).rejects.toThrow(/permission denied/);
   });
 
@@ -85,12 +85,18 @@ describe("sections and tasks", () => {
     expect(ev).toContain("task_reopened");
   });
 
-  it("reassigning is logged with the new person's name", async () => {
-    await asUser(m2, (c) => c.query("update tasks set assignee_id = $2 where id = $1", [t1, m2]));
-    expect((await types(p1)).at(-1)).toMatchObject({ event_type: "task_assigned", old_value: "Order signs", new_value: "Member Two" });
+  it("a task can have several assignees; adding and removing them is logged with names", async () => {
+    await asUser(m2, (c) => c.query("insert into task_assignees (task_id, user_id, assigned_by) values ($1,$2,$3), ($1,$4,$3)", [t1, m1, m2, m2]));
+    const who = (await owner.query("select user_id, assigned_by from task_assignees where task_id = $1 order by user_id", [t1])).rows;
+    expect(who.map((r) => r.user_id).sort()).toEqual([m1, m2].sort());
+    expect(who.every((r) => r.assigned_by === m2)).toBe(true);
+    await asUser(m1, (c) => c.query("delete from task_assignees where task_id = $1 and user_id = $2", [t1, m2]));
+    const ev = (await types(p1)).filter((e) => e.event_type.startsWith("task_") && e.event_type.includes("assign"));
+    expect(ev.map((e) => `${e.event_type}:${e.new_value}`)).toEqual(["task_assigned:Member One", "task_assigned:Member Two", "task_unassigned:Member Two"]);
+    expect((await asUser(gone, (c) => c.query("select * from task_assignees"))).rowCount).toBe(0);
   });
 
-  it("deleting a task removes its subtasks and leaves a history entry", async () => {
+  it("deleting a task removes its subtasks and assignees and leaves one history entry per task", async () => {
     await asUser(m2, (c) => c.query("delete from tasks where id = $1", [t1]));
     expect((await owner.query("select count(*)::int n from tasks where project_id = $1", [p1])).rows[0].n).toBe(0);
     expect((await types(p1)).filter((e) => e.event_type === "task_deleted").map((e) => e.old_value).sort()).toEqual(["Measure wall", "Order signs"]);
@@ -102,34 +108,58 @@ describe("sections and tasks", () => {
   });
 });
 
-describe("progress follows tasks (migration 010)", () => {
+describe("tasks drive status, current phase and progress (migrations 010-011)", () => {
   let p: string;
-  const progress = async () => (await owner.query("select progress from projects where id = $1", [p])).rows[0].progress as number;
-  const add = (title: string) => asUser(m1, async (c) => (await c.query("insert into tasks (project_id, title, created_by) values ($1,$2,$3) returning id", [p, title, m1])).rows[0].id as string);
+  const state = async () => (await owner.query("select status, phase, progress from projects where id = $1", [p])).rows[0];
+  const add = (title: string, extra: { section?: string; parent?: string } = {}) => asUser(m1, async (c) =>
+    (await c.query("insert into tasks (project_id, title, section_id, parent_id, created_by, sort_order) values ($1,$2,$3,$4,$5, coalesce((select max(sort_order)+1 from tasks where project_id = $1), 0)) returning id",
+      [p, title, extra.section ?? null, extra.parent ?? null, m1])).rows[0].id as string);
+  const tick = (id: string, done = true) => asUser(m2, (c) => c.query(`update tasks set completed_at = ${done ? "now()" : "null"} where id = $1`, [id]));
+  let a: string, b: string, c3: string, d: string;
 
-  it("keeps the manual value while a project has no tasks", async () => {
-    p = await createProject(m1, "Auto progress");
-    await asUser(m1, (c) => c.query("update projects set progress = 30 where id = $1", [p]));
-    expect(await progress()).toBe(30);
+  it("a project without tasks is not started at 0%, whatever is typed", async () => {
+    p = await createProject(m1, "Auto");
+    await asUser(m1, (c) => c.query("update projects set progress = 30, status = 'in_progress' where id = $1", [p]));
+    expect(await state()).toEqual({ status: "not_started", phase: "", progress: 0 });
   });
 
-  it("becomes the share of top-level tasks done, and moves as tasks are ticked off", async () => {
-    const a = await add("One"); const b = await add("Two"); await add("Three"); await add("Four");
-    expect(await progress()).toBe(0);
-    await asUser(m2, (c) => c.query("update tasks set completed_at = now() where id = $1", [a]));
-    expect(await progress()).toBe(25);
-    await asUser(m2, (c) => c.query("update tasks set completed_at = now() where id = $1", [b]));
-    expect(await progress()).toBe(50);
-    // Subtasks do not count.
-    await asUser(m1, (c) => c.query("insert into tasks (project_id, parent_id, title, created_by) values ($1,$2,'sub',$3)", [p, a, m1]));
-    expect(await progress()).toBe(50);
-    // A manual value cannot override it while tasks exist.
-    await asUser(m1, (c) => c.query("update projects set progress = 90 where id = $1", [p]));
-    expect(await progress()).toBe(50);
-    // Reopening moves it back; the change is in the history.
-    await asUser(m2, (c) => c.query("update tasks set completed_at = null where id = $1", [b]));
-    expect(await progress()).toBe(25);
-    const ev = (await owner.query("select old_value, new_value from project_events where project_id = $1 and field = 'progress' order by id", [p])).rows;
-    expect(ev.at(-1)).toEqual({ old_value: "50", new_value: "25" });
+  it("status, phase and progress follow the tasks as they are ticked off", async () => {
+    a = await add("Plan"); b = await add("Build"); c3 = await add("Test"); d = await add("Launch");
+    expect(await state()).toEqual({ status: "not_started", phase: "Plan", progress: 0 });
+    await tick(a);
+    expect(await state()).toEqual({ status: "in_progress", phase: "Build", progress: 25 });
+    await tick(c3); // out of order: the phase is still the first unfinished task
+    expect(await state()).toEqual({ status: "in_progress", phase: "Build", progress: 50 });
+    await add("Measure", { parent: a }); // subtasks do not count
+    expect((await state()).progress).toBe(50);
+    await tick(b); await tick(d);
+    expect(await state()).toEqual({ status: "done", phase: "", progress: 100 });
+    await tick(d, false);
+    expect(await state()).toEqual({ status: "in_progress", phase: "Launch", progress: 75 });
+  });
+
+  it("the phase follows the order shown: tasks without a section first, then sections in order", async () => {
+    const s2 = await asUser(m1, async (c) => (await c.query("insert into sections (project_id, name, sort_order) values ($1, 'Later', 2) returning id", [p])).rows[0].id as string);
+    const s1 = await asUser(m1, async (c) => (await c.query("insert into sections (project_id, name, sort_order) values ($1, 'Sooner', 1) returning id", [p])).rows[0].id as string);
+    await asUser(m1, (c) => c.query("update tasks set section_id = $2 where id = $1", [d, s2]));
+    await add("Prep", { section: s1 });
+    expect((await state()).phase).toBe("Prep");
+    // Reordering sections re-computes the phase.
+    await asUser(m1, (c) => c.query("update sections set sort_order = 0 where id = $1", [s2]));
+    expect((await state()).phase).toBe("Launch");
+  });
+
+  it("stuck and cancelled are manual flags that survive task changes; clearing them returns to automatic", async () => {
+    await asUser(m1, (c) => c.query("update projects set status = 'blocked' where id = $1", [p]));
+    await tick(d);
+    expect((await state()).status).toBe("blocked");
+    expect((await state()).progress).toBeGreaterThan(75);
+    await asUser(m1, (c) => c.query("update projects set status = 'not_started' where id = $1", [p]));
+    expect((await state()).status).toBe("in_progress");
+  });
+
+  it("every computed change is in the history", async () => {
+    const ev = (await owner.query("select field from project_events where project_id = $1 and event_type = 'updated'", [p])).rows.map((r) => r.field);
+    for (const f of ["status", "phase", "progress"]) expect(ev).toContain(f);
   });
 });

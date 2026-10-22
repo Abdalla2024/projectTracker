@@ -111,34 +111,12 @@ describe("editing and deleting comments", () => {
   });
 });
 
-describe("phase and progress", () => {
-  it("default to empty and 0; creators set them; changes are logged", async () => {
+describe("phase and progress come from tasks (migration 011)", () => {
+  it("a typed-in phase, progress or status is replaced by the computed values", async () => {
     const id = await asUser(m1, async (c) =>
-      (await c.query("insert into projects (name, status, created_by, phase, progress) values ('Phased', 'in_progress', $1, 'Drafting menu', 40) returning id", [m1])).rows[0].id as string);
-    const r = (await owner.query("select phase, progress from projects where id = $1", [id])).rows[0];
-    expect(r).toEqual({ phase: "Drafting menu", progress: 40 });
-    await asUser(m1, (c) => c.query("update projects set phase = 'Tasting', progress = 70 where id = $1", [id]));
-    const ev = (await owner.query("select field, old_value, new_value from project_events where project_id = $1 and event_type = 'updated' order by id", [id])).rows;
-    expect(ev).toEqual([
-      { field: "phase", old_value: "Drafting menu", new_value: "Tasting" },
-      { field: "progress", old_value: "40", new_value: "70" },
-    ]);
-  });
-
-  it("an assigned member may update phase and progress", async () => {
-    await asUser(admin, (c) => c.query("insert into project_assignees (project_id, user_id, assigned_by) values ($1,$2,$3)", [p1, m3, admin]));
-    await asUser(m3, (c) => c.query("update projects set phase = 'Review', progress = 90 where id = $1", [p1]));
-    expect((await owner.query("select progress from projects where id = $1", [p1])).rows[0].progress).toBe(90);
-  });
-
-  it("any member can change them in the shared workspace", async () => {
-    const r = await asUser(m2, (c) => c.query("update projects set progress = 5 where id = $1", [p1]));
-    expect(r.rowCount).toBe(1);
-  });
-
-  it("enforces the 24-character phase limit and the 0-100 range in the database", async () => {
-    await expect(asUser(m1, (c) => c.query("update projects set phase = $2 where id = $1", [p1, "x".repeat(25)]))).rejects.toThrow(/phase_check/);
-    await expect(asUser(m1, (c) => c.query("update projects set progress = 101 where id = $1", [p1]))).rejects.toThrow(/progress_check/);
-    await expect(asUser(m1, (c) => c.query("update projects set progress = -1 where id = $1", [p1]))).rejects.toThrow(/progress_check/);
+      (await c.query("insert into projects (name, status, created_by, phase, progress) values ('Phased', 'in_progress', $1, 'Typed phase', 40) returning id", [m1])).rows[0].id as string);
+    expect((await owner.query("select status, phase, progress from projects where id = $1", [id])).rows[0]).toEqual({ status: "not_started", phase: "", progress: 0 });
+    await asUser(m2, (c) => c.query("update projects set phase = 'Tasting', progress = 70, status = 'done' where id = $1", [id]));
+    expect((await owner.query("select status, phase, progress from projects where id = $1", [id])).rows[0]).toEqual({ status: "not_started", phase: "", progress: 0 });
   });
 });

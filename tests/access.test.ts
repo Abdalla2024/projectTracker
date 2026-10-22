@@ -122,7 +122,7 @@ describe("who may change what (shared workspace)", () => {
   });
 
   it("any member can edit any project's details", async () => {
-    await asUser(m3, (c) => c.query("update projects set status = 'in_progress', next_step = 'call vendor' where id = $1", [p3]));
+    await asUser(m3, (c) => c.query("update projects set priority = 'high', next_step = 'call vendor' where id = $1", [p3]));
     await asUser(m2, (c) => c.query("update projects set name = 'P1 renamed', priority = 'high' where id = $1", [p1]));
     expect((await owner.query("select name, priority from projects where id = $1", [p1])).rows[0]).toEqual({ name: "P1 renamed", priority: "high" });
     await asUser(m1, (c) => c.query("update projects set name = 'P1 by member one', priority = 'normal' where id = $1", [p1]));
@@ -168,11 +168,11 @@ describe("history", () => {
       "created:name",
       "assignee_added:assignee",
       "assignee_added:assignee",
-      "updated:status",
+      "updated:priority",
       "updated:next_step",
     ]);
-    const status = ev.find((e) => e.field === "status");
-    expect(status).toMatchObject({ old_value: "not_started", new_value: "in_progress", actor_id: m3 });
+    const priority = ev.find((e) => e.field === "priority");
+    expect(priority).toMatchObject({ old_value: "normal", new_value: "high", actor_id: m3 });
     expect(ev.filter((e) => e.event_type === "assignee_added").map((e) => e.new_value).sort()).toEqual(["Member One", "Member Three"]);
   });
 
@@ -202,7 +202,7 @@ describe("history", () => {
     await expect(
       asUser(m1, async (c) => {
         await c.query("update projects set name = 'will roll back' where id = $1", [p1]);
-        await c.query("update projects set status = 'bogus' where id = $1", [p1]);
+        await c.query("update projects set priority = 'bogus' where id = $1", [p1]);
       }),
     ).rejects.toThrow();
     expect((await owner.query("select count(*)::int n from project_events")).rows[0].n).toBe(before);
