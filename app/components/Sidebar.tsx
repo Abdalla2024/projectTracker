@@ -40,6 +40,13 @@ export function Sidebar({ isAdmin, locations, teams, logo, account }: {
       <i style={{ background: u.color }} aria-hidden="true" />{u.name}
     </Link>
   );
+  const group = (key: "locations" | "teams", title: string, kind: "location" | "team", units: Unit[], addLabel: string) =>
+    units.length || isAdmin ? (
+      <Collapsible id={key} title={title} count={units.length} forceOpen={!!params.get(kind) && path === "/"}>
+        {units.map((u) => unitLink(kind, u))}
+        {isAdmin ? <Link className="side-add" href={`/settings#${key}`}>{addLabel}</Link> : null}
+      </Collapsible>
+    ) : null;
 
   return (
     <aside className={`side${open ? " open" : ""}`}>
@@ -55,22 +62,34 @@ export function Sidebar({ isAdmin, locations, teams, logo, account }: {
             <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? "page" : undefined}>{ICONS[n.key]}<span>{n.label}</span></Link>
           ))}
         </nav>
-        {locations.length || isAdmin ? (
-          <div className="side-group">
-            <h4>Locations</h4>
-            {locations.map((u) => unitLink("location", u))}
-            {isAdmin ? <Link className="side-add" href="/settings#locations">+ Add location</Link> : null}
-          </div>
-        ) : null}
-        {teams.length || isAdmin ? (
-          <div className="side-group">
-            <h4>Teams</h4>
-            {teams.map((u) => unitLink("team", u))}
-            {isAdmin ? <Link className="side-add" href="/settings#teams">+ Add team</Link> : null}
-          </div>
-        ) : null}
+        {group("locations", "Locations", "location", locations, "+ Add location")}
+        {group("teams", "Teams", "team", teams, "+ Add team")}
         <div className="side-account">{account}</div>
       </div>
     </aside>
+  );
+}
+
+/** A sidebar group that folds away. The choice is remembered in this browser; it opens when one of its items is selected. */
+function Collapsible({ id, title, count, forceOpen, children }: { id: string; title: string; count: number; forceOpen: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    try { if (localStorage.getItem(`side-${id}`) === "closed") setOpen(false); } catch { /* storage unavailable: stay open */ }
+  }, [id]);
+  useEffect(() => { if (forceOpen) setOpen(true); }, [forceOpen]);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try { localStorage.setItem(`side-${id}`, next ? "open" : "closed"); } catch { /* ignore */ }
+  };
+  return (
+    <div className={`side-group${open ? "" : " collapsed"}`}>
+      <button type="button" className="side-group-toggle" aria-expanded={open} aria-controls={`side-${id}`} onClick={toggle}>
+        <h4>{title}</h4>
+        <span className="side-count">{count}</span>
+        <svg className="side-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      <div id={`side-${id}`} className="side-group-body" hidden={!open}>{children}</div>
+    </div>
   );
 }

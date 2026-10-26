@@ -156,8 +156,13 @@ export async function createProject(user: { id: string }, input: NewProject): Pr
     );
     const id: string = r.rows[0].id;
     await replaceAssignees(c, id, input.assigneeIds, user.id);
+    // Tasks created with the project go to the people the project is assigned to.
+    const people = [...new Set(input.assigneeIds)];
     for (const [i, title] of (input.taskTitles ?? []).entries()) {
-      await c.query("insert into tasks (project_id, title, created_by, sort_order) values ($1,$2,$3,$4)", [id, title, user.id, i]);
+      const taskId = (await c.query("insert into tasks (project_id, title, created_by, sort_order) values ($1,$2,$3,$4) returning id", [id, title, user.id, i])).rows[0].id as string;
+      for (const uid of people) {
+        await c.query("insert into task_assignees (task_id, user_id, assigned_by) values ($1,$2,$3)", [taskId, uid, user.id]);
+      }
     }
     return id;
   });

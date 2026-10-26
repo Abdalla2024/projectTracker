@@ -125,6 +125,43 @@ export async function deleteSection(userId: string, projectId: string, sectionId
 
 export interface TaskWithProject extends Task { project_name: string; project_archived: boolean; location_name: string | null; team_name: string | null }
 
+export interface MyProject {
+  id: string; name: string; status: string; progress: number; phase: string; priority: string;
+  location_name: string | null; location_color: string | null; team_name: string | null; team_color: string | null;
+  tasks_total: number; tasks_done: number;
+  tasks: Task[];
+}
+
+/**
+ * The projects this person has tasks in, each with just their tasks (open ones, plus ones finished in the
+ * last 7 days). Projects with something overdue come first, then by the nearest due date.
+ */
+export async function listMyProjects(userId: string, today: string): Promise<MyProject[]> {
+  const rows = await listMyTasks(userId);
+  const ids = [...new Set(rows.map((r) => r.project_id))];
+  if (!ids.length) return [];
+  const meta = await withUser(userId, async (c) =>
+    (await c.query(
+      `select p.id, p.name, p.status, p.progress, p.phase, p.priority,
+              l.name as location_name, l.color as location_color, t.name as team_name, t.color as team_color,
+              (select count(*)::int from tasks k where k.project_id = p.id and k.parent_id is null) as tasks_total,
+              (select count(*)::int from tasks k where k.project_id = p.id and k.parent_id is null and k.completed_at is not null) as tasks_done
+       from projects p left join locations l on l.id = p.location_id left join teams t on t.id = p.team_id
+       where p.id = any($1)`, [ids])).rows as Omit<MyProject, "tasks">[],
+  );
+  const projects: MyProject[] = meta.map((m) => ({ ...m, tasks: rows.filter((r) => r.project_id === m.id) }));
+  const urgency = (p: MyProject) => {
+    const open = p.tasks.filter((t) => !t.completed_at);
+    const late = open.some((t) => t.due_date && t.due_date < today) ? 0 : 1;
+    const next = open.map((t) => t.due_date).filter((d): d is string => !!d).sort()[0] ?? "9999-12-31";
+    return [open.length ? 0 : 1, late, next] as const;
+  };
+  return projects.sort((a, b) => {
+    const [ao, al, an] = urgency(a), [bo, bl, bn] = urgency(b);
+    return ao - bo || al - bl || an.localeCompare(bn) || a.name.localeCompare(b.name);
+  });
+}
+
 /** Open (and recently finished) tasks assigned to this person, across all projects. */
 export async function listMyTasks(userId: string): Promise<TaskWithProject[]> {
   return withUser(userId, async (c) =>

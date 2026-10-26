@@ -1,53 +1,60 @@
 import Link from "next/link";
-import { DateTime } from "luxon";
 import { Alerts } from "@/app/components/Alerts";
+import { StatusRing } from "@/app/components/StatusRing";
 import { DueChip, TaskCheck } from "@/app/components/TaskCheck";
+import { PRIORITY_LABELS } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
-import { listMyTasks, type TaskWithProject } from "@/lib/tasks";
+import { listMyProjects } from "@/lib/tasks";
 import { localDateString, timeZone } from "@/lib/time";
 
 export default async function MyTasksPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await requireUser();
   const { error } = await searchParams;
-  const zone = timeZone();
-  const today = localDateString(new Date(), zone);
-  const weekEnd = DateTime.fromISO(today).plus({ days: 7 }).toISODate()!;
-  const tasks = await listMyTasks(user.id);
-  const open = tasks.filter((t) => !t.completed_at);
-  const buckets: { key: string; label: string; items: TaskWithProject[] }[] = [
-    { key: "overdue", label: "Overdue", items: open.filter((t) => t.due_date && t.due_date < today) },
-    { key: "today", label: "Today", items: open.filter((t) => t.due_date === today) },
-    { key: "week", label: "Next 7 days", items: open.filter((t) => t.due_date && t.due_date > today && t.due_date <= weekEnd) },
-    { key: "later", label: "Later", items: open.filter((t) => t.due_date && t.due_date > weekEnd) },
-    { key: "none", label: "No due date", items: open.filter((t) => !t.due_date) },
-    { key: "done", label: "Completed in the last 7 days", items: tasks.filter((t) => t.completed_at) },
-  ].filter((b) => b.items.length);
+  const today = localDateString(new Date(), timeZone());
+  const projects = await listMyProjects(user.id, today);
+  const open = projects.reduce((n, p) => n + p.tasks.filter((t) => !t.completed_at).length, 0);
 
   return (
     <>
-      <div className="page-head"><h1>My tasks</h1><span className="muted">{open.length} open</span></div>
+      <div className="page-head"><h1>My tasks</h1><span className="muted">{open} open in {projects.length} {projects.length === 1 ? "project" : "projects"}</span></div>
       <Alerts error={error} />
-      {buckets.length === 0 ? <div className="empty-card">Nothing assigned to you. Tasks you are given inside projects show up here.</div> : null}
-      {buckets.map((b) => (
-        <section key={b.key} className={`card bucket ${b.key}`}>
-          <h2>{b.label}<span className="count">{b.items.length}</span></h2>
-          <ul className="tlist">
-            {b.items.map((t) => (
-              <li key={t.id} className={`trow${t.completed_at ? " done" : ""}`}>
-                <div className="tline">
-                  <TaskCheck id={t.id} title={t.title} done={!!t.completed_at} />
-                  <span className="ttitle static">{t.title}</span>
-                  <span className="tmeta">
-                    <Link className="chip project-link" href={`/?open=${t.project_id}#tasks-${t.project_id}`}>{t.project_name}</Link>
-                    {t.location_name ? <span className="chip">{t.location_name}</span> : null}
-                    <DueChip date={t.due_date} done={!!t.completed_at} today={today} />
+      {projects.length === 0 ? <div className="empty-card">Nothing assigned to you. Tasks you are given inside projects show up here, under their project.</div> : null}
+      <ul className="projects my-projects">
+        {projects.map((p) => {
+          const mine = p.tasks.filter((t) => !t.completed_at);
+          const late = mine.filter((t) => t.due_date && t.due_date < today).length;
+          return (
+            <li key={p.id} className="project">
+              <Link className="project-head" href={`/?open=${p.id}#p-${p.id}`}>
+                <StatusRing status={p.status} progress={p.progress} size={84} />
+                <div className="project-main">
+                  <span className="title">{p.name}</span>
+                  {p.phase ? <span className="phase">Working on: <b>{p.phase}</b></span> : null}
+                  <span className="tags">
+                    {p.location_name ? <span className="chip org"><i style={{ background: p.location_color ?? undefined }} />{p.location_name}</span> : null}
+                    {p.team_name ? <span className="chip org"><i style={{ background: p.team_color ?? undefined }} />{p.team_name}</span> : null}
+                    {p.priority === "high" || p.priority === "critical" ? <span className={`chip ${p.priority}`}>{PRIORITY_LABELS[p.priority]}</span> : null}
+                    <span className="chip">{p.tasks_done}/{p.tasks_total} tasks done</span>
+                    {late ? <span className="chip bad">{late} overdue</span> : null}
                   </span>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+                <span className="project-side"><span className="hint">{mine.length} for you</span></span>
+              </Link>
+              <ul className="tlist my-list">
+                {p.tasks.map((t) => (
+                  <li key={t.id} className={`trow${t.completed_at ? " done" : ""}`}>
+                    <div className="tline">
+                      <TaskCheck id={t.id} title={t.title} done={!!t.completed_at} />
+                      <span className="ttitle static">{t.title}</span>
+                      <span className="tmeta"><DueChip date={t.due_date} done={!!t.completed_at} today={today} /></span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ul>
     </>
   );
 }

@@ -583,3 +583,19 @@ a.cal-more { text-decoration: none; }
 .side-group a.side-add:hover { color: #fff; }
 #locations, #teams { scroll-margin-top: 20px; }
 .week + .hint { margin-top: 14px; }
+
+/* My tasks: one container per project, with only your tasks inside */
+.my-projects .project-head { padding: 20px 28px; }
+.my-list { padding: 0 28px 14px 28px; border-top: 1px solid var(--border); background: var(--wash); }
+.my-list .trow:last-child { border-bottom: 0; }
+.my-list .tline { padding-left: 4px; }
+
+/* Collapsible sidebar groups */
+.side-group-toggle { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: 0; padding: 6px 12px; border-radius: 10px; color: #71717a; cursor: pointer; text-align: left; }
+.side-group-toggle:hover { background: #1c1c1f; color: #d4d4d8; }
+.side-group-toggle h4 { margin: 0; }
+.side-count { font-size: .68rem; color: #71717a; background: #1c1c1f; border-radius: 999px; padding: 0 7px; }
+.side-chev { margin-left: auto; transition: transform .18s; }
+.side-group.collapsed .side-chev { transform: rotate(-90deg); }
+.side-group-body { display: flex; flex-direction: column; margin-top: 2px; }
+.side-group-body[hidden] { display: none; }
