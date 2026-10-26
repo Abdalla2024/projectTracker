@@ -87,7 +87,7 @@ export async function listProjects(userId: string, includeArchived: boolean): Pr
        left join locations l on l.id = p.location_id
        left join teams t on t.id = p.team_id
        where ($1 or p.archived_at is null)
-       order by (p.status in ('done','cancelled')), p.deadline nulls last, p.updated_at desc`,
+       order by (p.status in ('done','cancelled')), (p.priority = 'critical') desc, p.deadline nulls last, p.updated_at desc`,
       [includeArchived],
     );
     return r.rows;

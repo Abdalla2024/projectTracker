@@ -28,7 +28,7 @@ describe("migration 003: remove stores", () => {
     await migrateToLatest();
     await migrateToLatest();
     expect((await owner.query("select name from schema_migrations order by name")).rows.map((r) => r.name)).toEqual([
-      "001_schema.sql", "002_security.sql", "003_remove_stores.sql", "004_dev_exact_email.sql", "005_revoke_api_roles.sql", "006_passwords.sql", "007_phase_progress_threads.sql", "008_shared_workspace.sql", "009_nightly_reports.sql", "010_open_reports_task_progress.sql", "011_tasks_drive_projects.sql", "012_recompute_projects.sql",
+      "001_schema.sql", "002_security.sql", "003_remove_stores.sql", "004_dev_exact_email.sql", "005_revoke_api_roles.sql", "006_passwords.sql", "007_phase_progress_threads.sql", "008_shared_workspace.sql", "009_nightly_reports.sql", "010_open_reports_task_progress.sql", "011_tasks_drive_projects.sql", "012_recompute_projects.sql", "013_critical_priority.sql",
     ]);
   });
 

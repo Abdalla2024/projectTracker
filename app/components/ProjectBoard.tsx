@@ -24,7 +24,7 @@ export function ProjectBoard({ columns, cards }: { columns: { key: string; label
                   <div className="tags">
                     {c.location ? <span className="chip org"><i style={{ background: c.location.color }} />{c.location.name}</span> : null}
                     {c.team ? <span className="chip org"><i style={{ background: c.team.color }} />{c.team.name}</span> : null}
-                    {c.priority === "high" ? <span className="chip high">High</span> : null}
+                    {c.priority === "high" || c.priority === "critical" ? <span className={`chip ${c.priority}`}>{c.priority === "critical" ? "Critical" : "High"}</span> : null}
                     {c.due ? <span className={`chip ${c.overdue ? "bad" : ""}`}>{c.overdue ? "Overdue · " : "Due "}{c.due}</span> : null}
                     {c.tasks ? <span className="chip">{c.tasks}</span> : null}
                   </div>

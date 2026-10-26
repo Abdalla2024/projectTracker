@@ -25,7 +25,7 @@ function Swatches({ name, value }: { name: string; value: string }) {
 function OrgSection({ kind, title, units, hint }: { kind: OrgKind; title: string; units: OrgUnit[]; hint: string }) {
   const next = COLORS[units.length % COLORS.length];
   return (
-    <section className="card">
+    <section className="card" id={kind}>
       <h2>{title}</h2>
       <p className="hint">{hint}</p>
       <ul className="plain org-list">

@@ -55,8 +55,20 @@ export function Sidebar({ isAdmin, locations, teams, logo, account }: {
             <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? "page" : undefined}>{ICONS[n.key]}<span>{n.label}</span></Link>
           ))}
         </nav>
-        {locations.length ? <div className="side-group"><h4>Locations</h4>{locations.map((u) => unitLink("location", u))}</div> : null}
-        {teams.length ? <div className="side-group"><h4>Teams</h4>{teams.map((u) => unitLink("team", u))}</div> : null}
+        {locations.length || isAdmin ? (
+          <div className="side-group">
+            <h4>Locations</h4>
+            {locations.map((u) => unitLink("location", u))}
+            {isAdmin ? <Link className="side-add" href="/settings#locations">+ Add location</Link> : null}
+          </div>
+        ) : null}
+        {teams.length || isAdmin ? (
+          <div className="side-group">
+            <h4>Teams</h4>
+            {teams.map((u) => unitLink("team", u))}
+            {isAdmin ? <Link className="side-add" href="/settings#teams">+ Add team</Link> : null}
+          </div>
+        ) : null}
         <div className="side-account">{account}</div>
       </div>
     </aside>

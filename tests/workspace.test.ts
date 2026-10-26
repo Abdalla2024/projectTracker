@@ -175,3 +175,12 @@ describe("one-time catch-up (migration 012)", () => {
     expect((await owner.query("select count(*)::int n from project_events")).rows[0].n).toBe(events);
   });
 });
+
+describe("critical priority (migration 013)", () => {
+  it("accepts critical and still refuses unknown priorities", async () => {
+    const p = await createProject(m1, "Urgent one");
+    await asUser(m1, (c) => c.query("update projects set priority = 'critical' where id = $1", [p]));
+    expect((await owner.query("select priority from projects where id = $1", [p])).rows[0].priority).toBe("critical");
+    await expect(asUser(m1, (c) => c.query("update projects set priority = 'urgent' where id = $1", [p]))).rejects.toThrow(/priority_check/);
+  });
+});

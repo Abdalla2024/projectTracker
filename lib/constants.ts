@@ -1,6 +1,6 @@
 export const STATUSES = ["not_started", "in_progress", "blocked", "done", "cancelled"] as const;
 export type Status = (typeof STATUSES)[number];
-export const PRIORITIES = ["low", "normal", "high"] as const;
+export const PRIORITIES = ["low", "normal", "high", "critical"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -10,7 +10,7 @@ export const STATUS_LABELS: Record<string, string> = {
   done: "Done",
   cancelled: "Cancelled",
 };
-export const PRIORITY_LABELS: Record<string, string> = { low: "Low", normal: "Normal", high: "High" };
+export const PRIORITY_LABELS: Record<string, string> = { low: "Low", normal: "Normal", high: "High", critical: "Critical" };
 
 export const PHASE_MAX = 24;
 
